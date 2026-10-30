@@ -8,7 +8,7 @@ Projeto conectado: `mhmfqldibtcsuyqsqiqp`. Configure `VITE_SUPABASE_URL` e `VITE
 
 1. Crie chave gratuita HeiGIT e confira cota no painel.
 2. Configure `HEIGIT_API_KEY` como segredo da Edge Function `lusky-maps` no Supabase; nunca em `.env.local` com prefixo `VITE_` nem no Git.
-3. Na tela de Configurações, informe endereço real do restaurante, localize e confirme coordenadas, raio, taxa e meios de pagamento.
+3. Na tela de Configurações, informe endereço real do restaurante, localize e confirme coordenadas, raio, taxa e meios de pagamento. Sem chave HeiGIT, a equipe pode usar o GPS do aparelho estando no restaurante ou informar latitude/longitude, ajustar no mapa e confirmar o pino. O cliente pode marcar o destino no mapa a partir da origem configurada; a escolha manual exige tocar no ponto de entrega antes da confirmação. O cálculo automático de rota continua dependente da chave.
 4. Com conta QA, teste geocódigo, rota A→B e sequência de 2 pedidos. Se houver 403/429 ou timeout, a interface informa indisponibilidade; opere manualmente conforme [operação](operacao.md).
 5. Para tiles, `VITE_MAP_TILE_URL` opcional troca o provedor. Garanta atribuição e regras de cache/referer.
 

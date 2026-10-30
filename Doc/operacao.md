@@ -1,6 +1,6 @@
 # Operação diária
 
-1. Configure restaurante, raio, taxa e pagamento antes de habilitar Entrega. Sem coordenadas confirmadas ou chave HeiGIT, aceite apenas Retirada até concluir a configuração.
+1. Configure restaurante, raio, taxa e pagamento antes de habilitar Entrega. Sem coordenadas confirmadas para a origem, aceite apenas Retirada. Sem chave HeiGIT, use GPS no restaurante ou latitude/longitude, confirme o pino e peça ao cliente que marque o destino manualmente no mapa. Nesse caso, não há rota/ETA automáticos; confira endereço e use navegação externa para a viagem.
 2. Na Central, acompanhe pedidos Novos, Preparando, Prontos e em rota. Atribua motoboy ativo com documento válido. Se a sugestão de sequência falhar, ajuste a ordem manualmente.
 3. A cozinha informa o código de retirada ao motoboy no balcão. Nunca envie o código antes da retirada. O cliente informa o código de entrega apenas quando recebe a sacola. Cinco erros bloqueiam por 15 minutos.
 4. Se GPS for negado, antigo ou indisponível, a equipe contata o motoboy pelo canal operacional e registra ocorrência. A rota desenhada é planejamento; não representa a posição do motoboy.

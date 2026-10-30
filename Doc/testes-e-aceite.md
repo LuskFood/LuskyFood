@@ -13,6 +13,7 @@
 - Pix manual foi testado em transação revertida: pedido começou `pending`, Novo pedido→Preparando falhou, equipe confirmou via RPC, a transição passou e o estado final temporário foi `confirmed`/`Preparando`. Após `ROLLBACK`, continuou um pedido, Pix desativado e nenhuma instrução de teste salva.
 - Prévia do cliente foi aberta no navegador: prato entrou no carrinho, campo de observações apareceu e o item de teste foi removido sem enviar pedido. Histórico expansível ainda precisa de ensaio com conta cliente real.
 - A resposta atrasada de geocodificação agora é ignorada quando o endereço muda durante a busca. O preenchimento automático de campos por CEP invalida um pino previamente confirmado; esse comportamento ainda precisa de ensaio visual com chave HeiGIT configurada.
+- Foi incluída marcação manual do destino no mapa, iniciada no pino do restaurante com clique obrigatório no destino, e localização da origem por GPS ou coordenadas digitadas. Validação de limites de latitude/longitude entrou nos testes; a marcação manual ainda precisa de ensaio com endereço real.
 
 ## Pendente para aceite operacional
 

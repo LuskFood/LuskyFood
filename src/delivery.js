@@ -9,6 +9,13 @@ const locationFields = new Set(['street', 'street_number', 'no_number', 'distric
 
 export const addressLocationKey = address => JSON.stringify([...locationFields].map(field => address?.[field] ?? null))
 
+export function validMapPoint(point) {
+  return point?.latitude !== null && point?.latitude !== undefined && point?.latitude !== '' &&
+    point?.longitude !== null && point?.longitude !== undefined && point?.longitude !== '' &&
+    Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)) &&
+    Math.abs(Number(point.latitude)) <= 90 && Math.abs(Number(point.longitude)) <= 180
+}
+
 export function updateAddressField(address, field, value) {
   if (address[field] === value) return address
   const next = { ...address, [field]: value }
@@ -21,12 +28,11 @@ export function addressIsComplete(address) {
   return Boolean(digits(address.zip_code).length === 8 && address.street.trim().length >= 2 &&
     (address.no_number || address.street_number.trim()) && address.district.trim() &&
     address.city.trim().length >= 2 && /^[A-Z]{2}$/.test(address.state) &&
-    address.latitude != null && address.longitude != null &&
-    Number.isFinite(Number(address.latitude)) && Number.isFinite(Number(address.longitude)) && address.pin_confirmed)
+    validMapPoint(address) && address.pin_confirmed)
 }
 
 export function distanceKm(a, b) {
-  if (![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every(value => value !== null && value !== undefined && Number.isFinite(Number(value)))) return null
+  if (!validMapPoint(a) || !validMapPoint(b)) return null
   const rad = value => Number(value) * Math.PI / 180
   const dLat = rad(Number(b.latitude) - Number(a.latitude))
   const dLon = rad(Number(b.longitude) - Number(a.longitude))

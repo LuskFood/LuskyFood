@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addressIsComplete, addressLocationKey, distanceKm, digits, lookupCep, mapRequest, maskCep, maskCpf, maskPhone, updateAddressField } from '../src/delivery.js'
+import { addressIsComplete, addressLocationKey, distanceKm, digits, lookupCep, mapRequest, maskCep, maskCpf, maskPhone, updateAddressField, validMapPoint } from '../src/delivery.js'
 
 test('masks accept digits and pasted punctuation without losing numbers', () => {
   assert.equal(maskCep('01.001-000'), '01001-000')
@@ -35,6 +35,8 @@ test('editing an address location invalidates its confirmed pin', () => {
 test('coverage is approximate and rejects missing coordinates', () => {
   assert.equal(distanceKm({ latitude:-23.55, longitude:-46.63 }, { latitude:-23.55, longitude:-46.63 }), 0)
   assert.equal(distanceKm({ latitude:null, longitude:null }, { latitude:-23.55, longitude:-46.63 }), null)
+  assert.equal(validMapPoint({ latitude:91, longitude:-46.63 }), false)
+  assert.equal(validMapPoint({ latitude:'', longitude:-46.63 }), false)
 })
 
 test('CEP lookup keeps manual fallback on not found and outage', async () => {
