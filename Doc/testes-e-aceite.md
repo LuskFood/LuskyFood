@@ -2,7 +2,7 @@
 
 ## Executado em 30/10/2026
 
-- `npm test`: 6 testes passaram (máscaras, completude do endereço, invalidação de pino após alteração, cobertura, ViaCEP encontrado/indisponível, erro da função de mapa).
+- `npm test`: 7 testes passaram (máscaras, placa do veículo, completude do endereço, invalidação de pino após alteração, cobertura, ViaCEP encontrado/indisponível, erro da função de mapa).
 - `npm run build`: passou sem aviso de chunk acima de 500 kB. Bundle principal ~340 kB, Supabase ~224 kB e mapa ~156 kB, em chunks separados.
 - Migrações aplicadas no Supabase conectado e tabelas novas/RLS/publicação Realtime inspecionadas. `lusky_orders` e `lusky_driver_locations` estão na publicação. Escrita direta em pedido e leitura direta de códigos foram revogadas; RPC antiga de checkout não é executável por `authenticated`.
 - Edge Function `lusky-maps` implantada, versão 2, JWT obrigatório. Falta chave HeiGIT, portanto chamadas reais a Pelias, Directions e VROOM não foram executadas.
@@ -15,6 +15,7 @@
 - Prévia do cliente foi aberta no navegador: prato entrou no carrinho, campo de observações apareceu e o item de teste foi removido sem enviar pedido. Histórico expansível ainda precisa de ensaio com conta cliente real.
 - A resposta atrasada de geocodificação agora é ignorada quando o endereço muda durante a busca. O preenchimento automático de campos por CEP invalida um pino previamente confirmado; esse comportamento ainda precisa de ensaio visual com chave HeiGIT configurada.
 - Foi incluída marcação manual do destino no mapa, iniciada no pino do restaurante com clique obrigatório no destino, e localização da origem por GPS ou coordenadas digitadas. Validação de limites de latitude/longitude entrou nos testes; a marcação manual ainda precisa de ensaio com endereço real.
+- A equipe abriu “Minha conta” no navegador móvel; cabeçalho, dados pessoais, alteração de senha e botão de saída renderizaram com contraste. A prévia do cliente mostrou atalhos “Minha conta”/“Sair da prévia” e bloqueou edição de dados pessoais e senha. Salvamento de perfil, troca de senha e veículo não foram acionados na conta real durante a inspeção. Teste automatizado verifica normalização/validação de placa; persistência do veículo precisa de sessão QA de motoboy.
 
 ## Pendente para aceite operacional
 

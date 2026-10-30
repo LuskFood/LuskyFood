@@ -8,7 +8,7 @@ import {
   X, CircleDollarSign, CheckCircle2, CircleAlert, EyeOff, Copy, FileCheck2,
   Minus, Tag, Users, Bike, Eye,
   MapPin, Navigation, PackageCheck, ClipboardCheck, Clock,
-  UserPlus, Pencil, KeyRound, UserCheck, UserX, Trash2, ShieldCheck,
+  UserPlus, Pencil, KeyRound, UserCheck, UserX, Trash2, ShieldCheck, UserRound, LogOut,
 } from 'lucide-react'
 import { supabase } from './supabase'
 import CustomerPortalV2 from './CustomerPortal'
@@ -16,8 +16,10 @@ import RiderPortalV2 from './RiderPortal'
 import AdminOrderModal from './AdminOrderModal'
 import ProductEditor from './ProductEditor'
 import RestaurantSettings from './RestaurantSettings'
+import AccountSettings from './AccountSettings'
 import { OverviewPage, OrdersPage as OpsOrdersPage, CustomersPage as OpsCustomersPage, ReportsPage as OpsReportsPage } from './OperationsPages'
 import { digits, maskCpf, maskPhone } from './delivery'
+import { validVehiclePlate } from './account'
 
 const initialProducts = [
   { id: 'p-frango', name: 'Frango Xadrez', category: 'Pratos principais', price: 50, description: 'Frango suculento, legumes crocantes e molho especial, acompanhado de arroz.', icon: 'flame', image_url: '/images/frango-xadrez.jpg', color: 'peach', available: true, sold: 32 },
@@ -55,7 +57,6 @@ const money = value => Number(value || 0).toLocaleString('pt-BR', { style: 'curr
 const dishIcon = icon => ({ fork: UtensilsCrossed, bowl: CircleDollarSign, flame: Flame, sparkle: Sparkles, shopping: ShoppingBag })[icon] || UtensilsCrossed
 const validCpf = value => { const digits=String(value||'').replace(/\D/g,'');if(digits.length!==11||/^([0-9])\1{10}$/.test(digits))return false;const check=length=>{let sum=0;for(let i=0;i<length;i++)sum+=Number(digits[i])*(length+1-i);const digit=(sum*10)%11;return(digit===10?0:digit)===Number(digits[length])};return check(9)&&check(10) }
 const validRgFormat = value => /^[0-9A-Za-z.\-/ ]{5,18}$/.test(String(value||'').trim())&&String(value||'').replace(/[^0-9A-Za-z]/g,'').length>=5
-const validVehiclePlate = value => /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(String(value||'').replace(/[^A-Z0-9]/gi,'').toUpperCase())
 function DishMark({ product, size = 22 }) { const Icon = dishIcon(product?.icon); return product?.image_url ? <img src={product.image_url} alt="" /> : product?.emoji ? <span>{product.emoji}</span> : <Icon size={size} strokeWidth={1.8} /> }
 const orderKey = 'lusky-orders-v1'
 const productKey = 'lusky-products-v1'
@@ -72,7 +73,7 @@ const fetchAllOrders = async () => {
 
 const nav = [
   { section: 'PRINCIPAL', items: [{ id: 'Visão geral', icon: LayoutDashboard }, { id: 'Pedidos', icon: ShoppingBag }, { id: 'Cardápio', icon: UtensilsCrossed }, { id: 'Clientes', icon: Users }, { id: 'Motoboys', icon: Bike }] },
-  { section: 'GESTÃO', items: [{ id: 'Relatórios', icon: BarChart3 }, { id: 'Usuários', icon: Users }, { id: 'Configurações', icon: Settings2 }] },
+  { section: 'GESTÃO', items: [{ id: 'Relatórios', icon: BarChart3 }, { id: 'Usuários', icon: Users }, { id: 'Configurações', icon: Settings2 }, { id: 'Minha conta', icon: UserRound }] },
 ]
 
 function Brand() {
@@ -91,7 +92,7 @@ function Sidebar({ page, setPage, mobileOpen, setMobileOpen, canManageUsers }) {
 
 function Header({ page, setPage, setMobileOpen, onNewOrder, onSignOut }) {
   const titles = { 'Visão geral': ['Visão geral', 'Acompanhe o que está acontecendo no seu restaurante.'], Pedidos: ['Pedidos', 'Veja cada pedido e acompanhe o preparo em tempo real.'], Cardápio: ['Cardápio', 'Os sabores da casa, organizados em um só lugar.'], Clientes: ['Clientes', 'Conheça quem escolhe a Lusky Food.'], Motoboys: ['Motoboys', 'Confira os perfis da equipe de entrega.'], Usuários: ['Usuários', 'Crie contas e controle quem pode acessar o sistema.'], Relatórios: ['Relatórios', 'Os números que ajudam seu negócio a crescer.'], Configurações: ['Configurações', 'Tudo do seu restaurante, do seu jeito.'] }
-  return <header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-button" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="breadcrumbs"><span>Restaurante</span><ChevronRight size={13} /><b>{page}</b></div></div><div className="topbar-right"><button className="top-profile" title="Sair da conta" onClick={onSignOut}>Sair da conta</button></div></header>
+  return <header className="topbar"><div className="topbar-left"><button className="mobile-menu icon-button" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="breadcrumbs"><span>Restaurante</span><ChevronRight size={13} /><b>{page}</b></div></div><div className="topbar-right"><button className="account-nav-button" onClick={() => setPage('Minha conta')}><UserRound size={16}/> Minha conta</button><button className="account-nav-button account-signout" onClick={onSignOut}><LogOut size={16}/> Sair</button></div></header>
 }
 
 function SectionHeading({ eyebrow, title, subtitle, action, actionText, secondary, onAction, onSecondary }) {
@@ -589,9 +590,9 @@ export default function App() {
   const canManageUsers=role==='owner'&&!session?.localDemo&&!!supabase
   const openOrder=canManage?()=>setOrderModal(true):null
   const changeStatus=canManage?updateStatus:null
-  if(role==='customer')return <CustomerPortalV2 products={products} orders={orders} drivers={drivers} restaurant={restaurant} session={session} syncError={syncError} onPlaceOrder={saveOrder} onSignOut={()=>previewRole?setPreviewRole(null):session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
-  if(role==='motoboy')return <RiderPortalV2 orders={orders} restaurant={restaurant} syncError={syncError} driverProfile={drivers.find(driver=>driver.id===session?.user?.id)} onStatus={updateStatus} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
-  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>:page==='Relatórios'?<OpsReportsPage orders={orders}/>:<RestaurantSettings restaurant={restaurant} onSaved={setRestaurant}/>
+  if(role==='customer')return <CustomerPortalV2 products={products} orders={orders} drivers={drivers} restaurant={restaurant} session={session} syncError={syncError} preview={!!previewRole} onPlaceOrder={saveOrder} onSignOut={()=>previewRole?setPreviewRole(null):session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
+  if(role==='motoboy')return <RiderPortalV2 orders={orders} restaurant={restaurant} syncError={syncError} user={session?.user} demo={!!session?.localDemo} driverProfile={drivers.find(driver=>driver.id===session?.user?.id)} onDriverSaved={driver=>setDrivers(list=>list.map(item=>item.id===driver.id?{...item,...driver}:item))} onStatus={updateStatus} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
+  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>:page==='Relatórios'?<OpsReportsPage orders={orders}/>:page==='Minha conta'?<AccountSettings user={session?.user} role={role} demo={!!session?.localDemo} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>:<RestaurantSettings restaurant={restaurant} onSaved={setRestaurant}/>
   return <div className="app-shell"><Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} canManageUsers={canManageUsers}/><main className="main-area"><Header page={page} setPage={setPage} setMobileOpen={setMobileOpen} onNewOrder={()=>setOrderModal(true)} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/><div className="content-area">{session?.localDemo&&<div className="demo-data-note"><CircleHelp size={15}/><span><b>Modo demonstração</b> · pedidos e indicadores exibidos são exemplos locais.</span></div>}{syncError&&<p className="checkout-error" role="alert">{syncError}</p>}{content}<footer className="app-footer"><Brand/><span>Feito com sabor e cuidado <span>♥</span> · © 2026 Lusky Food</span></footer></div></main>{orderModal&&<AdminOrderModal products={products} restaurant={restaurant} onClose={()=>setOrderModal(false)} onSave={saveOrder}/ >}{productModal!==null&&<ProductEditor product={productModal.id?productModal:null} onClose={()=>setProductModal(null)} onSave={saveProduct}/>}<Toast message={toast} close={()=>setToast('')}/></div>
 }
 

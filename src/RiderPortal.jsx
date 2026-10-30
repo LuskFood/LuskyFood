@@ -1,12 +1,13 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react'
-import { Bike, Check, ClipboardCheck, MapPin, Navigation, PackageCheck, UtensilsCrossed } from 'lucide-react'
+import { Bike, Check, ClipboardCheck, LogOut, MapPin, Navigation, PackageCheck, UserRound, UtensilsCrossed } from 'lucide-react'
 import { mapRequest } from './delivery'
 import { supabase } from './supabase'
+import AccountSettings from './AccountSettings'
 
 const DeliveryMap = lazy(() => import('./DeliveryMap'))
 const formatTime = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short', timeZone:'America/Sao_Paulo' }) : '—'
 
-export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile, restaurant, syncError }) {
+export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile, restaurant, syncError, user, demo, onDriverSaved }) {
   const deliveries = orders.filter(order => order.type === 'Entrega' && ['Pronto','Saiu para entrega'].includes(order.status)).sort((a,b) => (a.route_order || 999) - (b.route_order || 999))
   const next = deliveries.find(order => order.status === 'Saiu para entrega') || deliveries[0]
   const active = deliveries.some(order => order.status === 'Saiu para entrega')
@@ -20,6 +21,7 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState('')
   const [available, setAvailable] = useState(true)
+  const [accountOpen,setAccountOpen] = useState(false)
   useEffect(() => { if (driverProfile) setAvailable(!!driverProfile.active) }, [driverProfile?.id, driverProfile?.active])
 
   useEffect(() => {
@@ -79,8 +81,8 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
   }
   const destination = next?.delivery_latitude != null ? { latitude: next.delivery_latitude, longitude: next.delivery_longitude } : null
   const navigateUrl = destination ? `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude}%2C${destination.longitude}` : null
-  return <div className="rider-portal"><header className="portal-header"><div className="brand"><span className="brand-symbol"><UtensilsCrossed size={19}/></span><span className="brand-wordmark">lusky<span>food</span></span></div><div className="portal-account"><Bike size={18}/><b>{driverProfile?.full_name || 'Motoboy Lusky'}</b><small>{driverProfile?.driver_code}</small><button className="text-button" onClick={onSignOut}>Sair</button></div></header>
-    <main className="rider-main">{syncError&&<p className="checkout-error" role="alert">{syncError}</p>}<section className="rider-welcome"><div><h1>Sua rota de hoje</h1><p>{deliveries.length} {deliveries.length === 1 ? 'entrega atribuída' : 'entregas atribuídas'} · confira a próxima ação.</p></div><button className="button button-secondary" onClick={toggleAvailability}>{available ? 'Disponível · ficar offline' : 'Offline · ficar disponível'}</button></section>
+  return <div className="rider-portal"><header className="portal-header"><div className="brand"><span className="brand-symbol"><UtensilsCrossed size={19}/></span><span className="brand-wordmark">lusky<span>food</span></span></div><div className="portal-account"><Bike size={18}/><b>{driverProfile?.full_name || 'Motoboy Lusky'}</b><small>{driverProfile?.driver_code}</small><button className="portal-account-link" onClick={()=>setAccountOpen(value=>!value)}><UserRound size={16}/>{accountOpen?'Minha rota':'Minha conta'}</button><button className="portal-account-link portal-signout" onClick={onSignOut}><LogOut size={16}/>Sair</button></div></header>
+    <main className="rider-main">{syncError&&<p className="checkout-error" role="alert">{syncError}</p>}{accountOpen?<AccountSettings user={user} role="motoboy" driverProfile={driverProfile} onDriverSaved={onDriverSaved} onSignOut={onSignOut} demo={demo}/>:<><section className="rider-welcome"><div><h1>Sua rota de hoje</h1><p>{deliveries.length} {deliveries.length === 1 ? 'entrega atribuída' : 'entregas atribuídas'} · confira a próxima ação.</p></div><button className="button button-secondary" onClick={toggleAvailability}>{available ? 'Disponível · ficar offline' : 'Offline · ficar disponível'}</button></section>
       <div className="rider-layout"><section className="route-list"><div className="route-list-heading"><h2>Paradas</h2></div>{deliveries.length ? deliveries.map((order,index) => <article className={`route-stop ${order.id === next?.id ? 'next-stop' : ''}`} key={order.id}><div className="stop-number">{index+1}</div><div className="stop-content"><div className="stop-topline"><b>{order.id}</b><span>{order.status}</span></div><h3>{order.name}</h3><p className="stop-address"><MapPin size={14}/>{order.address || 'Endereço pendente de confirmação'}</p><div className="stop-order-items">{order.items?.map(item => `${item.quantity}× ${item.name}`).join(' · ')}</div>
         {order.status === 'Pronto' && <label className="rider-code pickup"><span><ClipboardCheck size={15}/> Peça o código de retirada à cozinha</span><input inputMode="numeric" maxLength={6} value={codes[order.id] || ''} onChange={event => setCodes(current => ({ ...current, [order.id]: event.target.value.replace(/\D/g,'') }))} placeholder="Código da cozinha"/><button className="button button-dark" disabled={busy} onClick={() => confirm(order,'Saiu para entrega')}>Confirmar retirada <Check size={15}/></button></label>}
         {order.status === 'Saiu para entrega' && <><label className="rider-code delivery-code"><span><PackageCheck size={15}/> Peça o código ao cliente na chegada</span><input inputMode="numeric" maxLength={6} value={codes[order.id] || ''} onChange={event => setCodes(current => ({ ...current, [order.id]: event.target.value.replace(/\D/g,'') }))} placeholder="Código do cliente"/><button className="button button-yellow" disabled={busy} onClick={() => confirm(order,'Entregue')}>Confirmar entrega <Check size={15}/></button></label><div className="rider-incident"><label>Problema nesta entrega<textarea value={incidentText[order.id]||''} onChange={event=>setIncidentText(current=>({...current,[order.id]:event.target.value}))} placeholder="Descreva o que aconteceu para a equipe" maxLength={500}/></label><button className="text-button" onClick={()=>reportIncident(order)}>Registrar ocorrência</button></div></>}
@@ -88,5 +90,5 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
       <aside className="rider-map-panel"><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={destination} rider={position} route={route} /></Suspense><div className="map-note"><Navigation size={16}/><span><b>Rota planejada</b><small>{route ? `${(route.distance_m/1000).toFixed(1)} km · cerca de ${Math.ceil(route.duration_s/60)} min · calculada ${formatTime(route.calculated_at)}. Perfil carro, sem trânsito ao vivo.` : routeError || 'Aguardando cálculo da rota.'}</small></span></div>
         {next && navigateUrl && <a className="button button-secondary" href={navigateUrl} target="_blank" rel="noreferrer">Abrir navegação externa</a>}
         <div className="gps-panel"><b>Compartilhamento de localização</b><p>Enquanto houver entrega em rota, cliente e equipe podem ver sua última posição enviada.</p><button className="button button-dark" disabled={!active} onClick={() => setSharing(value => !value)}>{sharing ? 'Parar compartilhamento' : 'Iniciar GPS'}</button><small role="status">{gpsState}</small></div>
-      </aside></div></main></div>
+      </aside></div></>}</main></div>
 }

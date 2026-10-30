@@ -229,6 +229,53 @@
 .order-history-detail li { margin: 5px 0; }
 .address-map-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .address-map-actions .button { min-height: 38px; }
+.account-nav-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid #645033; border-radius: 8px; background: #30271d; color: #fff1d6; font-size: 12px; font-weight: 700; }
+.account-nav-button:hover,.account-nav-button:focus-visible { border-color: #ffc21a; color: #ffc21a; }
+.account-signout { background: transparent; }
+.portal-account-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 10px; border: 1px solid #67533a; border-radius: 8px; background: #2b2118; color: #fff2db; text-decoration: none; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.portal-account-link:hover,.portal-account-link:focus-visible { color: #ffc21a; border-color: #ffc21a; }
+.portal-signout { background: transparent; }
+.account-page { max-width: 920px; margin: 0 auto; }
+.account-card { padding: clamp(20px,3vw,32px); color: #eee5d9; }
+.account-identity { display: flex; align-items: center; gap: 14px; padding-bottom: 22px; border-bottom: 1px solid #493c2d; }
+.account-avatar { display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: 14px; background: #46341c; color: #ffc21a; }
+.account-identity>div { display: grid; gap: 3px; min-width: 0; }
+.account-identity b { color: #fff6e8; font-size: 17px; }
+.account-identity span:not(.account-avatar) { overflow-wrap: anywhere; color: #c8bcab; font-size: 12px; }
+.account-identity small { color: #ffc21a; font-size: 11px; }
+.account-section { display: grid; gap: 16px; padding: 25px 0; border-bottom: 1px solid #493c2d; }
+.account-section-heading { display: flex; align-items: flex-start; gap: 10px; }
+.account-section-heading svg { flex: none; margin-top: 2px; color: #ffc21a; }
+.account-section-heading h3 { margin: 0; color: #fff2de; font-size: 16px; }
+.account-section-heading p { margin: 3px 0 0; color: #bfb1a0; font-size: 11px; }
+.account-section .field-label { color: #e8ddce; font-size: 11px; }
+.account-section .field-label input { width: 100%; min-height: 40px; color: #fff3e2; background: #191510; border-color: #67533a; font-size: 13px; }
+.account-section>.button { justify-self: start; min-height: 40px; }
+.account-vehicle { display: grid; gap: 15px; padding-top: 8px; }
+.account-error,.account-success { margin: 0; padding: 10px 12px; border-radius: 7px; font-size: 12px; }
+.account-error { color: #ffd5ca; background: #50291f; }
+.account-success { color: #d5f2cb; background: #254028; }
+.account-exit { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-top: 22px; color: #bfb1a0; font-size: 11px; }
+.rider-portal .account-page { max-width: 920px; }
+.rider-portal .account-page .section-heading h1 { color: #231e16; }
+.rider-portal .account-page .section-heading p { color: #766b5a; }
+.rider-portal .account-card { color: #31281d; background: #fffdf8; border-color: #ddd2c0; }
+.rider-portal .account-identity,.rider-portal .account-section { border-color: #e6ddce; }
+.rider-portal .account-avatar { background: #f2e6ce; color: #775113; }
+.rider-portal .account-identity b,.rider-portal .account-section-heading h3 { color: #241e16; }
+.rider-portal .account-identity span:not(.account-avatar),.rider-portal .account-section-heading p,.rider-portal .account-exit { color: #736858; }
+.rider-portal .account-identity small,.rider-portal .account-section-heading svg { color: #9d6618; }
+.rider-portal .account-section .field-label { color: #584c3c; }
+.rider-portal .account-section .field-label input { color: #241e16; background: #fff; border-color: #d7cbb9; }
+.rider-portal .account-error,.customer-profile .account-error { color: #8b3124; background: #fff0e9; }
+.rider-portal .account-success,.customer-profile .account-success { color: #296036; background: #eaf4e8; }
+.customer-profile { scroll-margin-top: 100px; }
+.customer-profile .account-section { border-color: #e3d9c8; }
+.customer-profile .account-section-heading h3 { color: #2b2118; }
+.customer-profile .account-section-heading p,.customer-profile .account-exit { color: #746858; }
+.customer-profile .account-section .field-label { color: #55493a; }
+.customer-profile .account-section .field-label input { color: #241e16; background: #fff; border-color: #d8ccbb; }
+@media (max-width: 700px) { .topbar { padding: 0 14px; } .topbar-right { gap: 6px; } .account-nav-button { padding: 0 8px; font-size: 10px; } .portal-account { flex-wrap: wrap; justify-content: flex-end; gap: 6px; } .portal-account>b,.rider-portal .portal-account>small { display: none; } .account-exit { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 700px) {
   .customer-panel .customer-row { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px 12px; }
   .customer-panel .customer-row > span { display: block; }
