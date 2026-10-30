@@ -55,9 +55,9 @@ Deno.serve(async request => {
     if (!validPoint(start) || !validPoint(end)) return json({ error: "Origem ou destino ainda sem coordenadas confirmadas." }, 400);
     orderId = order.id;
     const { data: existing } = await admin.from("lusky_order_routes").select("geometry,distance_m,duration_s,calculated_at,profile").eq("order_id", order.id).maybeSingle();
-    if (existing) return json(existing);
+    if (existing?.profile === "driving-car-shortest") return json(existing);
     target = "https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson";
-    options = { method: "POST", headers: { Authorization: key, "Content-Type": "application/json" }, body: JSON.stringify({ coordinates: [start, end], instructions: false }) };
+    options = { method: "POST", headers: { Authorization: key, "Content-Type": "application/json" }, body: JSON.stringify({ coordinates: [start, end], preference: "shortest", instructions: false }) };
     cacheKey = `route:${order.id}`;
   } else if (action === "optimize") {
     if (!["owner","manager","staff"].includes(String(user.app_metadata?.role || ""))) return json({ error: "Somente a equipe pode sugerir sequência." }, 403);
@@ -93,7 +93,7 @@ Deno.serve(async request => {
     } else if (action === "route") {
       const feature = result.features?.[0];
       if (!feature?.geometry?.coordinates || !feature?.properties?.summary) return json({ error: "Rota indisponível para esses pontos." }, 404);
-      value = { geometry: feature.geometry, distance_m: feature.properties.summary.distance, duration_s: feature.properties.summary.duration, calculated_at: new Date().toISOString(), profile: "driving-car" };
+      value = { geometry: feature.geometry, distance_m: feature.properties.summary.distance, duration_s: feature.properties.summary.duration, calculated_at: new Date().toISOString(), profile: "driving-car-shortest" };
       if (orderId) {
         const { error: saveError } = await admin.from("lusky_order_routes").upsert({ order_id: orderId, ...value });
         if (saveError) return json({ error: "A rota foi calculada, mas não pôde ser salva." }, 500);

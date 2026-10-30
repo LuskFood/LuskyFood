@@ -45,7 +45,7 @@ export default function DeliveryMap({ restaurant, destination, rider, route }) {
     {restaurant && <Marker position={[restaurant.latitude, restaurant.longitude]} icon={kitchenIcon} />}
     {destination && <Marker position={[destination.latitude, destination.longitude]} icon={destinationIcon} />}
     {rider && <Marker position={[rider.latitude, rider.longitude]} icon={riderIcon} />}
-    {line.length > 1 && <Polyline positions={line} pathOptions={{ color: '#f0472b', weight: 5 }} />}
-    {endpoints.length === 2 && <Polyline positions={endpoints} pathOptions={{ color: '#17130d', weight: 4, opacity: .8, dashArray: '9 12' }} />}
-  </MapContainer>{endpoints.length===2&&<div className="map-legend"><span className="map-legend-dash"/> Retirada → entrega · linha reta de referência{line.length>1&&' (rota por vias em laranja)'}</div>}</div>
+    {line.length > 1 && <Polyline positions={line} pathOptions={{ color: '#f0472b', weight: 5, opacity: .95, dashArray: '10 10' }} />}
+    {line.length < 2 && endpoints.length === 2 && <Polyline positions={endpoints} pathOptions={{ color: '#17130d', weight: 4, opacity: .8, dashArray: '9 12' }} />}
+  </MapContainer>{endpoints.length===2&&<div className="map-legend"><span className="map-legend-dash"/> {line.length>1?'Trajeto pelas ruas · menor distância calculada':'Retirada → entrega · linha reta de referência'}</div>}</div>
 }

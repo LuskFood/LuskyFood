@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Confira o e-mail, o nome completo e a senha (mínimo de 8 caracteres)." }, 400);
       }
       if (!/^\d{11}$/.test(phone)) return json({ error: "Informe um celular com DDD (11 dígitos)." }, 400);
-      if (!["customer", "motoboy", "owner"].includes(role)) return json({ error: "Tipo de conta inválido." }, 400);
+      if (!["customer", "motoboy", "owner", "manager", "staff"].includes(role)) return json({ error: "Tipo de conta inválido." }, 400);
       const metadata: Record<string, string> = {
         full_name: fullName,
         phone,
@@ -142,32 +142,59 @@ Deno.serve(async (req: Request) => {
       const fullName = String(body.full_name ?? "").trim();
       const email = String(body.email ?? "").trim().toLowerCase();
       const phone = String(body.phone ?? "").replace(/\D/g, "");
+      const role = String(body.role ?? targetRole);
+      const password = String(body.password ?? "");
       if (fullName.length < 3 || fullName.length > 120 || !email.includes("@")) {
         return json({ error: "Confira o nome completo e o e-mail." }, 400);
       }
       if (!/^\d{11}$/.test(phone)) return json({ error: "Informe um celular com DDD (11 dígitos)." }, 400);
+      if (!["customer", "motoboy", "owner", "manager", "staff"].includes(role)) return json({ error: "Tipo de conta inválido." }, 400);
+      if (password && password.length < 8) return json({ error: "A senha deve ter ao menos 8 caracteres." }, 400);
+      if (userId === actor.id && role !== targetRole) return json({ error: "Não é possível alterar seu próprio tipo de conta por aqui." }, 400);
+      if (targetRole === "motoboy" && role !== "motoboy") {
+        const { count } = await admin.from("lusky_orders").select("id", { count: "exact", head: true }).eq("assigned_driver", userId).in("status", ["Pronto", "Saiu para entrega"]);
+        if (count) return json({ error: "Reatribua as entregas ativas antes de mudar o tipo desta conta." }, 409);
+      }
+      if (targetRole === "owner" && role !== "owner") {
+        const { data: owners, error: ownersError } = await admin.auth.admin.listUsers({ perPage: 1000 });
+        if (ownersError) throw ownersError;
+        if (owners.users.filter(item => item.app_metadata?.role === "owner").length < 2) return json({ error: "Mantenha ao menos uma conta administradora." }, 409);
+      }
+      const vehicle = body.vehicle ?? {};
+      const vehicleFields = {
+        vehicle_color: String(vehicle.vehicle_color ?? "").trim(),
+        vehicle_plate: String(vehicle.vehicle_plate ?? "").trim().toUpperCase(),
+        vehicle_brand: String(vehicle.vehicle_brand ?? "").trim(),
+        vehicle_model: String(vehicle.vehicle_model ?? "").trim(),
+      };
+      if (role === "motoboy" && (Object.values(vehicleFields).some(value => !value) || !/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(vehicleFields.vehicle_plate))) return json({ error: "Confira os dados e a placa do veículo." }, 400);
+      if (role === "motoboy") {
+        const { error: driverError } = await admin.rpc("lusky_admin_save_driver", {
+          p_user_id: userId, p_full_name: fullName,
+          p_document_type: String(body.document_type ?? ""), p_document_number: String(body.document_number ?? ""),
+          p_vehicle_color: vehicleFields.vehicle_color, p_vehicle_plate: vehicleFields.vehicle_plate,
+          p_vehicle_brand: vehicleFields.vehicle_brand, p_vehicle_model: vehicleFields.vehicle_model,
+        });
+        if (driverError) return json({ error: driverError.message }, 400);
+      }
       const { error } = await admin.auth.admin.updateUserById(userId, {
         email,
         email_confirm: true,
-        user_metadata: { ...target.user_metadata, full_name: fullName, phone },
+        ...(password ? { password } : {}),
+        app_metadata: { ...target.app_metadata, role },
+        user_metadata: { ...target.user_metadata, full_name: fullName, phone, account_type: role },
       });
       if (error) return json({ error: error.message }, 400);
       const { error: profileError } = await admin.from("lusky_profiles").update({ display_name: fullName, full_name: fullName, phone }).eq("id", userId);
       if (profileError) throw profileError;
-      if (targetRole === "motoboy") {
-        const vehicle = body.vehicle ?? {};
-        const vehicleFields = {
-          vehicle_color: String(vehicle.vehicle_color ?? "").trim(),
-          vehicle_plate: String(vehicle.vehicle_plate ?? "").trim().toUpperCase(),
-          vehicle_brand: String(vehicle.vehicle_brand ?? "").trim(),
-          vehicle_model: String(vehicle.vehicle_model ?? "").trim(),
-        };
-        if (Object.values(vehicleFields).some(value => !value)) return json({ error: "Preencha cor, placa, marca e modelo do veículo." }, 400);
-        if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(vehicleFields.vehicle_plate)) return json({ error: "Confira o formato da placa." }, 400);
-        const { error: driverError } = await admin.from("lusky_motoboy_profiles").update({ full_name: fullName, ...vehicleFields }).eq("id", userId);
+      if (role === "motoboy" && targetRole !== "motoboy") {
+        const { error: driverError } = await admin.from("lusky_motoboy_profiles").update({ active: true }).eq("id", userId);
+        if (driverError) throw driverError;
+      } else if (targetRole === "motoboy") {
+        const { error: driverError } = await admin.from("lusky_motoboy_profiles").update({ active: false }).eq("id", userId);
         if (driverError) throw driverError;
       }
-      return json({ ok: true });
+      return json({ ok: true, role_changed: role !== targetRole });
     }
 
     if (action === "reset_password") {
@@ -186,9 +213,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "delete") {
-      const { count, error: ordersError } = await admin.from("lusky_orders").select("id", { count: "exact", head: true }).eq("created_by", userId);
-      if (ordersError) throw ordersError;
-      if ((count ?? 0) > 0) return json({ error: "Esta conta tem pedidos no histórico. Desative-a para preservar os registros." }, 409);
+      const [created, assigned] = await Promise.all([
+        admin.from("lusky_orders").select("id", { count: "exact", head: true }).eq("created_by", userId),
+        admin.from("lusky_orders").select("id", { count: "exact", head: true }).eq("assigned_driver", userId),
+      ]);
+      if (created.error || assigned.error) throw created.error || assigned.error;
+      if ((created.count ?? 0) + (assigned.count ?? 0) > 0) return json({ error: "Esta conta tem pedidos no histórico. Desative-a para preservar os registros." }, 409);
       const { error } = await admin.auth.admin.deleteUser(userId);
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });

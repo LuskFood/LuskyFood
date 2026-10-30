@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Bike, CheckCircle2, Clock3, MapPin, Search, ShoppingBag, UtensilsCrossed } from 'lucide-react'
 import { mapRequest } from './delivery'
 import { supabase } from './supabase'
+import { summarizeOrders } from './analytics'
 
 const DeliveryMap = lazy(() => import('./DeliveryMap'))
 const money = value => Number(value || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
@@ -13,14 +14,31 @@ const nextStatus = order => order.status === 'Novo pedido' ? 'Preparando' : orde
 
 function Metric({ label, value, detail }) { return <article className="stat-card"><div className="stat-number">{value}</div><div className="stat-label">{label}</div><div className="stat-note">{detail}</div></article> }
 
+function BarChart({ rows, valueKey = 'revenue', format = money, label = 'Vendas por dia' }) {
+  const maximum = Math.max(1, ...rows.map(row => row[valueKey] || 0))
+  return <div className="insight-chart" role="img" aria-label={`${label}: ${rows.map(row => `${row.label}: ${format(row[valueKey])}`).join('; ')}`}>
+    <div className="insight-chart-grid"><span>{format(maximum)}</span><span>{format(maximum / 2)}</span><span>{format(0)}</span></div>
+    <div className="insight-chart-columns">{rows.map((row, index) => <div className="insight-chart-column" key={`${row.label}-${index}`} title={`${row.label}: ${format(row[valueKey])}`}><div className="insight-chart-track"><i style={{ height: `${Math.max(0, (row[valueKey] || 0) / maximum * 100)}%` }}/></div><small>{row.label}</small></div>)}</div>
+  </div>
+}
+
+function ShareList({ rows, empty }) {
+  const total = rows.reduce((sum, row) => sum + row.count, 0)
+  return rows.length ? <div className="insight-share-list">{rows.map(row => <div className="insight-share-row" key={row.name}><div><b>{row.name}</b><span>{row.count} · {total ? Math.round(row.count / total * 100) : 0}%</span></div><i><em style={{ width: `${total ? row.count / total * 100 : 0}%` }}/></i></div>)}</div> : <p className="insight-empty">{empty}</p>
+}
+
 export function OverviewPage({ orders, products, setPage, onNewOrder }) {
   const today = orders.filter(order => order.created_at && dayKey(order.created_at) === todayKey())
-  const delivered = today.filter(completed)
-  const revenue = delivered.reduce((sum,order)=>sum+Number(order.total),0)
-  const active = orders.filter(order=>!['Entregue','Cancelado'].includes(order.status))
-  return <><div className="section-heading"><div><h1>Operação de hoje</h1><p>Pedidos da operação, no horário de Brasília.</p></div><button className="button button-dark" onClick={onNewOrder}>Novo pedido</button></div><div className="stats-grid"><Metric label="Pedidos recebidos hoje" value={today.length} detail="Inclui pedidos ainda em preparo"/><Metric label="Em andamento" value={active.length} detail="Pedidos que precisam de ação"/><Metric label="Entregues hoje" value={delivered.length} detail="Conclusões confirmadas"/><Metric label="Vendas concluídas hoje" value={money(revenue)} detail="Soma dos pedidos entregues"/></div>
-    <section className="panel recent-panel"><div className="panel-heading"><div><h2>Pedidos que precisam de atenção</h2><small>{active.length} em andamento</small></div><button className="text-button" onClick={()=>setPage('Pedidos')}>Abrir central <ArrowRight size={14}/></button></div>{active.length ? active.slice(0,8).map(order=><div className="ops-order-row" key={order.id}><b>{order.id}</b><span>{order.name}</span><span>{order.status}</span><small>{dateTime(order.created_at)}</small></div>) : <div className="empty-state">Nenhum pedido em andamento.</div>}</section>
-    <section className="panel popular-panel"><div className="panel-heading"><h2>Cardápio disponível</h2><button className="text-button" onClick={()=>setPage('Cardápio')}>Gerenciar</button></div><p>{products.filter(product=>product.available).length} de {products.length} pratos disponíveis para novos pedidos.</p></section></>
+  const todayDone = today.filter(completed)
+  const revenue = todayDone.reduce((sum, order) => sum + Number(order.total || 0), 0)
+  const active = orders.filter(order => !['Entregue', 'Cancelado'].includes(order.status))
+  const summary = summarizeOrders(orders, 7)
+  const chart = summary.daily.map(row => ({ ...row, label: `${row.day.slice(8, 10)}/${row.day.slice(5, 7)}` }))
+  const recent = orders.slice().sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0)).slice(0, 6)
+  return <div className="insights-page overview-page"><div className="insights-hero"><div><span>{new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full' }).format(new Date())}</span><h1>Seu dia está com tudo, Lusky.</h1><p>Acompanhe a operação e os pedidos da casa em tempo real.</p></div><button className="button button-dark" onClick={onNewOrder}>+ Novo pedido</button></div>
+    <div className="insights-metrics"><Metric label="Vendas concluídas hoje" value={money(revenue)} detail="Pedidos entregues hoje"/><Metric label="Pedidos recebidos hoje" value={today.length} detail="Todos os tipos de pedido"/><Metric label="Ticket médio de hoje" value={money(todayDone.length ? revenue / todayDone.length : 0)} detail="Pedidos entregues hoje"/><Metric label="Em andamento" value={active.length} detail="Pedidos que ainda precisam de ação"/></div>
+    <div className="insights-main-grid"><section className="panel insight-panel"><div className="panel-heading"><div><h2>Visão de vendas</h2><small>Pedidos entregues · últimos 7 dias</small></div><b className="insight-total">{money(summary.revenue)}</b></div><BarChart rows={chart}/></section><section className="panel insight-panel"><div className="panel-heading"><div><h2>Queridinhos da casa</h2><small>Pratos dos pedidos entregues nos últimos 7 dias</small></div><button className="text-button" onClick={() => setPage('Cardápio')}>Cardápio <ArrowRight size={14}/></button></div>{summary.dishes.length ? summary.dishes.slice(0, 5).map((dish, index) => <div className="insight-dish" key={dish.name}><span>{String(index + 1).padStart(2, '0')}</span><b>{dish.name}</b><small>{dish.quantity} unidades</small></div>) : <p className="insight-empty">Nenhum prato vendido nesta semana.</p>}<p className="insight-availability">{products.filter(product => product.available).length} de {products.length} pratos disponíveis no cardápio.</p></section></div>
+    <section className="panel insight-panel insight-recent"><div className="panel-heading"><div><h2>Pedidos recentes</h2><small>{active.length} em andamento</small></div><button className="text-button" onClick={() => setPage('Pedidos')}>Ver todos os pedidos <ArrowRight size={14}/></button></div>{recent.length ? recent.map(order => <button className="insight-recent-row" key={order.id} onClick={() => setPage('Pedidos')}><span className="insight-avatar">{String(order.name || '?').trim().charAt(0)}</span><span><b>{order.name}</b><small>{order.id} · {order.type}</small></span><span className={`insight-status ${order.status === 'Entregue' ? 'is-done' : ''}`}>{order.status}</span><strong>{money(order.total)}</strong><small>{dateTime(order.created_at)}</small><ArrowRight size={16}/></button>) : <p className="insight-empty">Nenhum pedido registrado.</p>}</section></div>
 }
 
 function KitchenCode({ order }) {
@@ -150,14 +168,14 @@ export function CustomersPage({ orders }) {
 
 export function ReportsPage({ orders }) {
   const [period,setPeriod]=useState('7')
-  const days=Number(period)
-  const start=Date.now()-days*86400000
-  const filtered=orders.filter(order=>order.created_at&&Date.parse(order.created_at)>=start)
-  const done=filtered.filter(completed)
-  const revenue=done.reduce((sum,order)=>sum+Number(order.total),0)
-  const items=new Map()
-  for(const order of done)for(const item of order.items||[]){const key=item.name;const current=items.get(key)||{name:key,quantity:0,revenue:0};current.quantity+=Number(item.quantity);current.revenue+=Number(item.unit_price||0)*Number(item.quantity);items.set(key,current)}
-  const rows=[...items.values()].sort((a,b)=>b.quantity-a.quantity)
-  const exportCsv=()=>{const csv=['Prato;Quantidade;Receita (R$)',...rows.map(item=>`"${item.name.replaceAll('"','""')}";${item.quantity};${item.revenue.toFixed(2).replace('.',',')}`)].join('\r\n');const url=URL.createObjectURL(new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=`lusky-relatorio-${period}d.csv`;link.click();URL.revokeObjectURL(url)}
-  return <><div className="section-heading"><div><h1>Relatórios</h1><p>Dados dos pedidos concluídos no período selecionado.</p></div><label>Período <select value={period} onChange={event=>setPeriod(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label></div><div className="stats-grid"><Metric label="Pedidos recebidos" value={filtered.length} detail="No período"/><Metric label="Pedidos concluídos" value={done.length} detail="Estado entregue"/><Metric label="Faturamento concluído" value={money(revenue)} detail="Total dos pedidos entregues"/><Metric label="Ticket médio" value={money(done.length?revenue/done.length:0)} detail="Pedidos entregues"/></div><section className="panel best-sellers"><div className="panel-heading"><h2>Pratos vendidos</h2><button className="text-button" disabled={!rows.length} onClick={exportCsv}>Exportar CSV <ArrowRight size={14}/></button></div>{rows.length?rows.map(item=><div className="popular-row" key={item.name}><b>{item.name}</b><span>{item.quantity} unidades</span><strong>{money(item.revenue)}</strong></div>):<div className="empty-state">Ainda não há vendas concluídas neste período.</div>}</section></>
+  const summary=summarizeOrders(orders,Number(period))
+  const rows=summary.dishes
+  const chart=summary.daily.map(row=>({...row,label:`${row.day.slice(8,10)}/${row.day.slice(5,7)}`}))
+  const active=summary.period.filter(order=>!['Entregue','Cancelado'].includes(order.status)).length
+  const exportCsv=()=>{const csv=['Prato;Quantidade;Receita (R$)',...rows.map(item=>`"${item.name.replaceAll('"','""')}";${item.quantity};${item.priced?item.revenue.toFixed(2).replace('.',','):''}`)].join('\r\n');const url=URL.createObjectURL(new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=`lusky-relatorio-${period}d.csv`;link.click();URL.revokeObjectURL(url)}
+  return <div className="insights-page reports-page"><div className="insights-hero"><div><h1>Relatórios</h1><p>Dados dos pedidos no período selecionado. Receita considera apenas entregas concluídas.</p></div><label>Período<select value={period} onChange={event=>setPeriod(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label></div>
+    <div className="insights-metrics"><Metric label="Pedidos recebidos" value={summary.period.length} detail="Criados no período"/><Metric label="Pedidos entregues" value={summary.done.length} detail="Conclusões confirmadas"/><Metric label="Faturamento concluído" value={money(summary.revenue)} detail="Pedidos entregues"/><Metric label="Ticket médio" value={money(summary.ticket)} detail="Receita por pedido entregue"/></div>
+    <div className="insights-main-grid"><section className="panel insight-panel"><div className="panel-heading"><div><h2>Vendas por dia</h2><small>Receita de pedidos entregues</small></div></div><BarChart rows={chart}/></section><section className="panel insight-panel"><div className="panel-heading"><div><h2>Estado dos pedidos</h2><small>{active} ainda em andamento</small></div></div><ShareList rows={summary.statuses} empty="Ainda não há pedidos neste período."/></section></div>
+    <div className="insights-main-grid"><section className="panel insight-panel"><div className="panel-heading"><div><h2>Pedidos por horário</h2><small>Horário de criação · Brasília</small></div></div><BarChart rows={summary.hourly.filter((_, index) => index % 2 === 0).map(row => ({ ...row, label: `${String(row.hour).padStart(2, '0')}h`, received: row.received + (summary.hourly[row.hour + 1]?.received || 0) }))} valueKey="received" format={value => String(Math.round(value))} label="Pedidos recebidos por faixa de duas horas"/></section><section className="panel insight-panel"><div className="panel-heading"><div><h2>Tipo de atendimento</h2><small>Todos os pedidos do período</small></div></div><ShareList rows={summary.types} empty="Ainda não há pedidos neste período."/></section></div>
+    <section className="panel insight-panel insight-products"><div className="panel-heading"><div><h2>Pratos vendidos</h2><small>Quantidade e receita nos pedidos entregues</small></div><button className="text-button" disabled={!rows.length} onClick={exportCsv}>Exportar CSV <ArrowRight size={14}/></button></div>{rows.length ? rows.map((item,index) => <div className="insight-dish" key={item.name}><span>{String(index+1).padStart(2,'0')}</span><b>{item.name}</b><small>{item.quantity} unidades</small><strong>{item.priced?money(item.revenue):'—'}</strong></div>) : <p className="insight-empty">Ainda não há pratos vendidos neste período.</p>}</section></div>
 }
