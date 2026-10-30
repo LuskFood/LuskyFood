@@ -222,26 +222,41 @@ function MotoboysPage({ drivers }) {
 const roleLabel = role => ({ customer: 'Cliente', motoboy: 'Motoboy', owner: 'Administrador', manager: 'Gerente', staff: 'Equipe' })[role] || 'Cliente'
 const userInitials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
 
-function DemoUsersPage() {
-  const people = [
-    ['Lusky Food', 'Administrador', 'owner@luskyfood.local'],
-    ['Marina Costa', 'Cliente', 'marina@exemplo.local'],
-    ['Rafael Almeida', 'Motoboy', 'rafael@exemplo.local'],
-    ['Bruna Santos', 'Motoboy', 'bruna@exemplo.local'],
-  ]
-  return <><SectionHeading eyebrow="EQUIPE E ACESSO" title="Gerenciar usuários" subtitle="Visualização de exemplo para conhecer a área administrativa."/><div className="demo-data-note"><CircleHelp size={16}/><span>Contas de demonstração. Entre com a conta real de administrador para criar, editar ou desativar usuários.</span></div><section className="panel demo-users-panel"><div className="panel-heading"><h2>Contas de exemplo</h2><span>{people.length} usuários</span></div>{people.map(([name,role,email])=><div className="demo-user-row" key={email}><span className="customer-avatar">{userInitials(name)}</span><div><b>{name}</b><small>{email}</small></div><span>{role}</span></div>)}</section></>
+let demoManagedUsers = [
+  { id:'demo-owner', full_name:'Lusky Food', email:'owner@luskyfood.local', phone:'11900000001', role:'owner', active:true },
+  { id:'demo-marina', full_name:'Marina Costa', email:'marina@exemplo.local', phone:'11900000002', role:'customer', active:true },
+  { id:'demo-rafael', full_name:'Rafael Almeida', email:'rafael@exemplo.local', phone:'11900000003', role:'motoboy', active:true, driver_code:'MB-001', vehicle_details:{vehicle_color:'Preta',vehicle_plate:'ABC1D23',vehicle_brand:'Honda',vehicle_model:'CG 160'} },
+  { id:'demo-bruna', full_name:'Bruna Santos', email:'bruna@exemplo.local', phone:'11900000004', role:'motoboy', active:false, driver_code:'MB-002', vehicle_details:{vehicle_color:'Vermelha',vehicle_plate:'DEF4G56',vehicle_brand:'Yamaha',vehicle_model:'Factor 150'} },
+].map(user => ({...user, created_at:new Date('2026-10-29T12:00:00Z').toISOString()}))
+const demoAdminClient = { functions:{ invoke:async (_name,{body}) => {
+  const user = demoManagedUsers.find(item => item.id === body.user_id)
+  if (body.action === 'list') return {data:{users:demoManagedUsers.map(item => ({...item}))}}
+  if (body.action === 'create') { demoManagedUsers = [...demoManagedUsers,{id:`demo-${crypto.randomUUID()}`,full_name:body.full_name,email:body.email,phone:body.phone,role:body.role,active:true,created_at:new Date().toISOString(),vehicle_details:body.role==='motoboy'?{vehicle_color:body.vehicle_color,vehicle_plate:body.vehicle_plate,vehicle_brand:body.vehicle_brand,vehicle_model:body.vehicle_model}:null}]; return {data:{ok:true}} }
+  if (!user) return {data:{error:'Conta de demonstração não encontrada.'}}
+  if (body.action === 'update') { demoManagedUsers = demoManagedUsers.map(item => item.id===user.id?{...item,full_name:body.full_name,email:body.email,phone:body.phone,role:body.role,vehicle_details:body.role==='motoboy'?body.vehicle:item.vehicle_details}:item); return {data:{ok:true,role_changed:body.role!==user.role}} }
+  if (body.action === 'disable' || body.action === 'enable') { demoManagedUsers = demoManagedUsers.map(item => item.id===user.id?{...item,active:body.action==='enable'}:item); return {data:{ok:true}} }
+  if (body.action === 'delete') { demoManagedUsers = demoManagedUsers.filter(item => item.id!==user.id); return {data:{ok:true}} }
+  if (body.action === 'reset_password') return {data:{ok:true}}
+  return {data:{error:'Ação indisponível na demonstração.'}}
+} } }
+function DemoUsersPage({ notify }) { return <AdminUsersPage client={demoAdminClient} currentUser={{id:'demo-owner'}} notify={message=>notify(`Demonstração: ${message}`)} demo/> }
+
+function PasswordField({ id, label, value, onChange, shown, onToggle, placeholder, required = false }) {
+  return <div className="field-label password-field"><label htmlFor={id}>{label}</label><div className="password-control"><input id={id} type={shown ? 'text' : 'password'} required={required} minLength={8} maxLength={128} autoComplete="new-password" value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder}/><button className="password-toggle" type="button" onClick={onToggle} aria-label={shown ? `Ocultar ${label.toLowerCase()}` : `Mostrar ${label.toLowerCase()}`} aria-pressed={shown}>{shown ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div></div>
 }
 
-function AdminUsersPage({ client, currentUser, notify }) {
+function AdminUsersPage({ client, currentUser, notify, demo = false }) {
   const [users, setUsers] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('todos')
+  const [showInactive, setShowInactive] = useState(true)
   const [busy, setBusy] = useState(false)
   const [pageError, setPageError] = useState('')
   const [modal, setModal] = useState(null)
-  const [resultPassword, setResultPassword] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' })
+  const [passwordVisible, setPasswordVisible] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
   const emptyForm = { full_name: '', email: '', phone: '', password: '', confirmPassword: '', role: 'customer', document_type: 'CPF', document_number: '', vehicle_color: '', vehicle_plate: '', vehicle_brand: '', vehicle_model: '' }
   const [form, setForm] = useState(emptyForm)
 
@@ -267,7 +282,7 @@ function AdminUsersPage({ client, currentUser, notify }) {
   const visible = users.filter(user => {
     const matchFilter = filter === 'todos' || user.role === filter
     const text = `${user.full_name} ${user.email} ${user.driver_code || ''}`.toLowerCase()
-    return matchFilter && text.includes(query.toLowerCase())
+    return matchFilter && (showInactive || user.active) && text.includes(query.toLowerCase())
   })
   const openCreate = () => { setForm(emptyForm); setModal({ mode: 'create' }) }
   const openEdit = user => {
@@ -319,21 +334,28 @@ function AdminUsersPage({ client, currentUser, notify }) {
     setBusy(true)
     setPageError('')
     try {
-      const data = await call(action, { user_id: user.id })
-      if (action === 'reset_password') {
-        setResultPassword(data.password)
-        setCopied(false)
-        setModal({ mode: 'password', email: user.email })
-      } else {
-        notify(action === 'delete' ? 'Conta excluída.' : action === 'disable' ? 'Conta desativada.' : 'Conta habilitada.')
-        await load()
-      }
+      await call(action, { user_id: user.id })
+      notify(action === 'delete' ? 'Conta excluída.' : action === 'disable' ? 'Conta desativada.' : 'Conta habilitada.')
+      await load()
     } catch (error) { setPageError(error.message) }
     finally { setBusy(false) }
   }
 
-  const resetPassword = user => {
-    if (window.confirm(`Gerar uma senha temporária nova para ${user.email}? A senha atual deixará de funcionar.`)) runUserAction('reset_password', user)
+  const resetPassword = user => { setPasswordForm({ password: '', confirm: '' }); setPasswordVisible(false); setPasswordError(''); setModal({ mode: 'password', user }) }
+  const savePassword = async event => {
+    event.preventDefault()
+    if (busy) return
+    setPasswordError('')
+    if (passwordForm.password.length < 8 || passwordForm.password.length > 128) { setPasswordError('Use uma senha entre 8 e 128 caracteres.'); return }
+    if (passwordForm.password !== passwordForm.confirm) { setPasswordError('As senhas não coincidem.'); return }
+    setBusy(true)
+    try {
+      await call('reset_password', { user_id: modal.user.id, password: passwordForm.password })
+      setPasswordForm({ password: '', confirm: '' })
+      setModal(null)
+      notify('Senha redefinida. A pessoa poderá usar a nova senha no próximo acesso.')
+    } catch (error) { setPasswordError(error.message) }
+    finally { setBusy(false) }
   }
   const toggleActive = user => {
     const action = user.active ? 'disable' : 'enable'
@@ -345,19 +367,16 @@ function AdminUsersPage({ client, currentUser, notify }) {
   const deleteAccount = user => {
     if (window.confirm(`Excluir permanentemente ${user.email}? Esta ação não pode ser desfeita. Se houver pedidos, o sistema vai impedir a exclusão para preservar o histórico.`)) runUserAction('delete', user)
   }
-  const copyPassword = async () => {
-    try { await navigator.clipboard.writeText(resultPassword); setCopied(true) } catch { setCopied(false) }
-  }
-
   const isEdit = modal?.mode === 'edit'
   const isDriver = form.role === 'motoboy'
   const isOwner = form.role === 'owner'
 
   return <div className="admin-users-page">
-    <div className="admin-users-heading"><div><h1>Gerenciar usuários</h1><p>Crie contas, atualize acessos e mantenha a equipe da Lusky organizada.</p></div><button className="button button-dark" onClick={openCreate}><UserPlus size={16}/> Criar conta</button></div>
+    {demo && <div className="demo-data-note"><CircleHelp size={16}/><span>Prévia local: alterações nesta lista e redefinições de senha são simuladas. Entre como administrador real para gerenciar contas do Supabase.</span></div>}
+    <div className="admin-users-heading"><div><h1>Usuários e colaboradores</h1><p>Edite perfis, controle o acesso e redefina senhas da equipe Lusky.</p></div><button className="button button-dark" onClick={openCreate}><UserPlus size={16}/> Novo usuário</button></div>
     <div className="user-management-summary"><span className="user-summary-mark"><ShieldCheck size={19}/></span><span><b>{users.length}</b><small>contas cadastradas</small></span><span className="user-summary-divider"/><span><b>{users.filter(user => user.active).length}</b><small>com acesso habilitado</small></span><p>Somente a conta administradora pode acessar esta área.</p></div>
     <section className="user-management-panel">
-      <div className="user-list-toolbar"><div><h2>Contas do sistema</h2><span>{visible.length} {visible.length === 1 ? 'resultado' : 'resultados'}</span></div><label className="inline-search"><Search size={15}/><input aria-label="Buscar usuário" placeholder="Buscar por nome, e-mail ou ID" value={query} onChange={event => setQuery(event.target.value)}/></label><select aria-label="Filtrar por tipo de conta" value={filter} onChange={event => setFilter(event.target.value)}><option value="todos">Todos os tipos</option><option value="customer">Clientes</option><option value="motoboy">Motoboys</option><option value="owner">Administradores</option><option value="manager">Gerentes</option><option value="staff">Equipe</option></select></div>
+      <div className="user-list-toolbar"><div><h2>Contas do sistema</h2><span>{visible.length} {visible.length === 1 ? 'resultado' : 'resultados'}</span></div><label className="inline-search"><Search size={15}/><input aria-label="Buscar usuário" placeholder="Buscar por nome, e-mail ou ID" value={query} onChange={event => setQuery(event.target.value)}/></label><label className="inactive-filter"><input type="checkbox" checked={showInactive} onChange={event => setShowInactive(event.target.checked)}/> Mostrar inativos</label><select aria-label="Filtrar por tipo de conta" value={filter} onChange={event => setFilter(event.target.value)}><option value="todos">Todos os tipos</option><option value="customer">Clientes</option><option value="motoboy">Motoboys</option><option value="owner">Administradores</option><option value="manager">Gerentes</option><option value="staff">Equipe</option></select></div>
       {pageError && <div className="user-management-error"><CircleAlert size={16}/><span>{pageError}</span><button onClick={() => load()}>Tentar novamente</button></div>}
       {!loaded && !pageError && <div className="user-list-loading"><span className="pulse-dot"/> Carregando contas...</div>}
       {loaded && !users.length && !pageError && <div className="user-list-empty"><Users size={24}/><b>Nenhuma conta encontrada</b><span>Crie a primeira conta usando o botão acima.</span></div>}
@@ -372,14 +391,14 @@ function AdminUsersPage({ client, currentUser, notify }) {
             <span className="managed-date">{new Date(user.created_at).toLocaleDateString('pt-BR')}</span>
             <div className="managed-actions">
               <button title="Editar dados" aria-label={`Editar ${user.email}`} disabled={busy || own} onClick={() => openEdit(user)}><Pencil size={15}/></button>
-              <button title="Gerar senha temporária" aria-label={`Resetar senha de ${user.email}`} disabled={busy || own} onClick={() => resetPassword(user)}><KeyRound size={15}/></button>
+              <button title="Definir nova senha" aria-label={`Definir nova senha de ${user.email}`} disabled={busy || own} onClick={() => resetPassword(user)}><KeyRound size={16}/></button>
               <button title={user.active ? 'Desativar conta' : 'Habilitar conta'} aria-label={`${user.active ? 'Desativar' : 'Habilitar'} ${user.email}`} disabled={busy || own || user.role === 'owner'} onClick={() => toggleActive(user)}>{user.active ? <UserX size={15}/> : <UserCheck size={15}/>}</button>
               <button className="delete-user-action" title="Excluir conta" aria-label={`Excluir ${user.email}`} disabled={busy || own || user.role === 'owner'} onClick={() => deleteAccount(user)}><Trash2 size={15}/></button>
             </div>
           </article>
         })}</div>
         {!visible.length && <div className="user-list-empty"><Users size={24}/><b>Nenhuma conta encontrada</b><span>Experimente outro termo ou tipo de usuário.</span></div>}
-        <div className="user-list-footer"><span>Contas e permissões são atualizadas no Supabase.</span><button onClick={load} disabled={busy}><Activity size={14}/> Atualizar lista</button></div>
+        <div className="user-list-footer"><span>{demo?'Contas de exemplo; nenhuma ação altera usuários reais.':'Contas e permissões são atualizadas no Supabase.'}</span><button onClick={load} disabled={busy}><Activity size={14}/> Atualizar lista</button></div>
       </>}
     </section>
 
@@ -390,14 +409,14 @@ function AdminUsersPage({ client, currentUser, notify }) {
       <label className="field-label">E-mail<input required type="email" value={form.email} onChange={event => updateField('email', event.target.value)} placeholder="pessoa@email.com"/></label>
       <label className="field-label">Celular com DDD<input required inputMode="tel" autoComplete="tel" value={maskPhone(form.phone)} onChange={event => updateField('phone', digits(event.target.value).slice(0,11))} placeholder="(11) 99999-9999"/></label>
       {!isEdit && <><label className="field-label">Senha inicial<input required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={event => updateField('password', event.target.value)} placeholder="Mínimo de 8 caracteres"/></label><label className="field-label">Confirmar senha<input required type="password" minLength={8} autoComplete="new-password" value={form.confirmPassword} onChange={event => updateField('confirmPassword', event.target.value)} placeholder="Digite a senha novamente"/></label></>}
-      {isEdit && <div className="settings-two"><label className="field-label">Nova senha (opcional)<input type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={event => updateField('password', event.target.value)} placeholder="Deixe vazio para manter"/></label><label className="field-label">Confirmar nova senha<input type="password" minLength={8} autoComplete="new-password" value={form.confirmPassword} onChange={event => updateField('confirmPassword', event.target.value)} placeholder="Repita a nova senha"/></label></div>}
+      {isEdit && <p className="managed-password-hint"><KeyRound size={14}/> Use a ação de chave na lista para definir uma nova senha.</p>}
       {isDriver && <div className="managed-driver-fields"><div className="managed-fields-title"><Bike size={15}/> Dados do motoboy</div><div className="settings-two"><label className="field-label">Documento<select value={form.document_type} onChange={event => updateField('document_type', event.target.value)}><option value="CPF">CPF</option><option value="RG">RG</option></select></label><label className="field-label">Número do {form.document_type}<input required={!isEdit || modal.user.role !== 'motoboy'} value={form.document_number} onChange={event => updateField('document_number', event.target.value)} placeholder={isEdit && modal.user.role === 'motoboy' ? 'Deixe vazio para manter' : form.document_type === 'CPF' ? '000.000.000-00' : 'Número do RG'}/></label></div><div className="settings-two"><label className="field-label">Cor<input required value={form.vehicle_color} onChange={event => updateField('vehicle_color', event.target.value)} placeholder="Ex.: Preta"/></label><label className="field-label">Placa<input required maxLength={7} value={form.vehicle_plate} onChange={event => updateField('vehicle_plate', event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="ABC1D23"/><small className={`managed-plate-hint ${form.vehicle_plate ? (validVehiclePlate(form.vehicle_plate) ? 'is-valid' : 'is-invalid') : ''}`}>ABC1D23 · 3 letras, número, caractere alfanumérico e 2 números</small></label></div><div className="settings-two"><label className="field-label">Marca<input required value={form.vehicle_brand} onChange={event => updateField('vehicle_brand', event.target.value)} placeholder="Ex.: Honda"/></label><label className="field-label">Modelo<input required value={form.vehicle_model} onChange={event => updateField('vehicle_model', event.target.value)} placeholder="Ex.: CG 160"/></label></div></div>}
       {isOwner && !isEdit && <div className="owner-create-note"><ShieldCheck size={15}/> Uma conta administradora terá controle sobre todo o sistema.</div>}
       {pageError && <div className="user-management-error"><CircleAlert size={15}/><span>{pageError}</span></div>}
       <div className="modal-footer"><button className="button button-secondary" type="button" disabled={busy} onClick={() => setModal(null)}>Cancelar</button><button className="button button-dark" type="submit" disabled={busy}>{busy ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Criar conta'} <ArrowRight size={15}/></button></div>
     </form></div>}
 
-    {modal?.mode === 'password' && <div className="modal-backdrop" onClick={() => setModal(null)}><section className="modal-card reset-password-result" onClick={event => event.stopPropagation()}><div className="modal-heading"><div><span className="modal-icon"><KeyRound size={17}/></span><h2>Senha temporária pronta</h2><p>Entregue esta senha ao usuário por um canal seguro. Ela aparece somente agora.</p></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div><label className="field-label">Conta<input readOnly value={modal.email}/></label><label className="field-label">Nova senha temporária<span className="temporary-password">{resultPassword}</span></label><div className="modal-footer"><button className="button button-secondary" onClick={() => setModal(null)}>Fechar</button><button className="button button-dark" onClick={copyPassword}>{copied ? <Check size={15}/> : <Copy size={15}/>} {copied ? 'Copiada' : 'Copiar senha'}</button></div></section></div>}
+    {modal?.mode === 'password' && <div className="modal-backdrop" onClick={() => !busy && setModal(null)}><form className="modal-card reset-password-result" onSubmit={savePassword} onClick={event => event.stopPropagation()}><div className="modal-heading"><div><span className="modal-icon"><KeyRound size={17}/></span><h2>Definir nova senha</h2><p>Escolha manualmente a senha de {modal.user.full_name || modal.user.email}. A senha atual deixará de funcionar no próximo acesso.</p></div><button type="button" className="icon-button" disabled={busy} onClick={() => setModal(null)} aria-label="Fechar"><X size={18}/></button></div><div className="password-account"><span>Conta</span><b>{modal.user.email}</b></div><PasswordField id="admin-new-password" label="Nova senha" value={passwordForm.password} onChange={value => setPasswordForm(current => ({ ...current, password: value }))} shown={passwordVisible} onToggle={() => setPasswordVisible(value => !value)} placeholder="Mínimo de 8 caracteres" required/><PasswordField id="admin-confirm-password" label="Confirmar nova senha" value={passwordForm.confirm} onChange={value => setPasswordForm(current => ({ ...current, confirm: value }))} shown={passwordVisible} onToggle={() => setPasswordVisible(value => !value)} placeholder="Repita a nova senha" required/>{passwordError && <div className="user-management-error" role="alert"><CircleAlert size={15}/><span>{passwordError}</span></div>}<div className="modal-footer"><button type="button" className="button button-secondary" disabled={busy} onClick={() => setModal(null)}>Cancelar</button><button type="submit" className="button button-dark" disabled={busy || !passwordForm.password || !passwordForm.confirm}>{busy ? 'Salvando…' : 'Redefinir senha'} <ArrowRight size={15}/></button></div></form></div>}
   </div>
 }
 
@@ -609,7 +628,7 @@ export default function App() {
   const changeStatus=canManage?updateStatus:null
   if(role==='customer')return <CustomerPortalV2 products={products} orders={orders} drivers={drivers} restaurant={restaurant} session={session} syncError={syncError} preview={!!previewRole} onPlaceOrder={saveOrder} onSignOut={()=>previewRole?setPreviewRole(null):session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
   if(role==='motoboy')return <RiderPortalV2 orders={orders} restaurant={restaurant} syncError={syncError} user={session?.user} demo={!!session?.localDemo} driverProfile={drivers.find(driver=>driver.id===session?.user?.id)} onDriverSaved={driver=>setDrivers(list=>list.map(item=>item.id===driver.id?{...item,...driver}:item))} onStatus={updateStatus} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
-  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?(session?.localDemo?<DemoUsersPage/>:<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>):page==='Relatórios'?<OpsReportsPage orders={orders}/>:page==='Minha conta'?<AccountSettings user={session?.user} role={role} demo={!!session?.localDemo} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>:<RestaurantSettings restaurant={restaurant} onSaved={value=>{setRestaurant(value);if(session?.localDemo)localStorage.setItem(demoRestaurantKey,JSON.stringify(value))}} demo={!!session?.localDemo}/>
+  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?(session?.localDemo?<DemoUsersPage notify={notify}/>:<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>):page==='Relatórios'?<OpsReportsPage orders={orders}/>:page==='Minha conta'?<AccountSettings user={session?.user} role={role} demo={!!session?.localDemo} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>:<RestaurantSettings restaurant={restaurant} onSaved={value=>{setRestaurant(value);if(session?.localDemo)localStorage.setItem(demoRestaurantKey,JSON.stringify(value))}} demo={!!session?.localDemo}/>
   return <div className="app-shell"><Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} canManageUsers={canManageUsers}/><main className="main-area"><Header page={page} setPage={setPage} setMobileOpen={setMobileOpen} onNewOrder={()=>setOrderModal(true)} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/><div className="content-area">{session?.localDemo&&<div className="demo-data-note"><CircleHelp size={15}/><span><b>Modo demonstração</b> · pedidos e indicadores exibidos são exemplos locais.</span></div>}{syncError&&<p className="checkout-error" role="alert">{syncError}</p>}{content}<footer className="app-footer"><Brand/><span>Feito com sabor e cuidado <span>♥</span> · © 2026 Lusky Food</span></footer></div></main>{orderModal&&<AdminOrderModal products={products} restaurant={restaurant} onClose={()=>setOrderModal(false)} onSave={saveOrder}/ >}{productModal!==null&&<ProductEditor product={productModal.id?productModal:null} onClose={()=>setProductModal(null)} onSave={saveProduct}/>}<Toast message={toast} close={()=>setToast('')}/></div>
 }
 

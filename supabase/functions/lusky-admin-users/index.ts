@@ -12,13 +12,6 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
 
-function randomPassword() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("") + "aA7!";
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -198,10 +191,11 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "reset_password") {
-      const password = randomPassword();
+      const password = String(body.password ?? "");
+      if (password.length < 8 || password.length > 128) return json({ error: "Escolha uma senha entre 8 e 128 caracteres." }, 400);
       const { error } = await admin.auth.admin.updateUserById(userId, { password });
       if (error) return json({ error: error.message }, 400);
-      return json({ password });
+      return json({ ok: true });
     }
 
     if (action === "disable" || action === "enable") {
