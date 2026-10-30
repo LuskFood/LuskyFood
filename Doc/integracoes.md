@@ -14,7 +14,7 @@ Projeto conectado: `mhmfqldibtcsuyqsqiqp`. Configure `VITE_SUPABASE_URL` e `VITE
 
 ## GitHub e frontend
 
-Destino fornecido: `https://github.com/LuskFood/LuskyFood.git`, privado. A conexão GitHub desta sessão não tem acesso (404), e `gh` não está instalado. Publicação remota não foi confirmada. O diretório local pode ser inicializado e vinculado; uma sessão autorizada deve fazer push sem `force`, verificar branch/commit e a pasta `Doc/`.
+Destino fornecido: `https://github.com/LuskFood/LuskyFood.git`, privado. O Git local foi inicializado na branch `main`, com `origin` configurado e commit inicial `0876208`. A conexão GitHub desta sessão não tem acesso (404), e `gh` não está instalado. `git ls-remote --heads origin` e `git push -u origin main` retornaram “Repository not found”; a publicação remota não foi concluída. Uma sessão autorizada deve executar `git push -u origin main` sem `force`, verificar branch/commit e a pasta `Doc/`.
 
 Publique `dist/` em host estático HTTPS com fallback SPA. Configure somente variáveis públicas do Vite no host, redirecionamentos Auth para domínio HTTPS, cache de assets e rollback pelo commit anterior. Migrações/Edge Function no Supabase são publicação separada. GPS web requer HTTPS e permissão do aparelho.
 

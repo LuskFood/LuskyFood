@@ -6,6 +6,7 @@
 - `npm run build`: passou. O bundle principal ainda emite aviso acima de 500 kB (~560 kB); mapa é carregado separadamente.
 - Migrações aplicadas no Supabase conectado e tabelas novas/RLS/publicação Realtime inspecionadas. `lusky_orders` e `lusky_driver_locations` estão na publicação. Escrita direta em pedido e leitura direta de códigos foram revogadas; RPC antiga de checkout não é executável por `authenticated`.
 - Edge Function `lusky-maps` implantada, versão 2, JWT obrigatório. Falta chave HeiGIT, portanto chamadas reais a Pelias, Directions e VROOM não foram executadas.
+- A tentativa de abrir o Vite no navegador local falhou por isolamento de loopback deste ambiente; a revisão visual e interação das telas não foram validadas.
 
 ## Pendente para aceite operacional
 

@@ -37,7 +37,10 @@ export default function CustomerPortal({ products, orders, drivers, session, onP
   const fee = type === 'Entrega' ? Number(restaurant?.delivery_fee || 0) : 0
   const deliveryDistance = distanceKm(restaurant, address)
   const deliveryCovered = deliveryDistance != null && restaurant?.delivery_radius_km != null && deliveryDistance <= Number(restaurant.delivery_radius_km)
-  const canSubmit = count > 0 && name.trim().length >= 3 && digits(phone).length === 11 && (type === 'Retirada' || (addressIsComplete(address) && deliveryCovered))
+  const paymentEnabled = payment === 'cash' ? restaurant?.accepts_cash !== false : restaurant?.accepts_manual_pix === true
+  const canSubmit = count > 0 && paymentEnabled && name.trim().length >= 3 && digits(phone).length === 11 && (type === 'Retirada' || (addressIsComplete(address) && deliveryCovered))
+
+  useEffect(() => { if (restaurant?.accepts_cash === false && restaurant?.accepts_manual_pix && payment === 'cash') setPayment('manual_pix') }, [restaurant?.accepts_cash, restaurant?.accepts_manual_pix, payment])
 
   useEffect(() => { sessionStorage.setItem(cartKey, JSON.stringify(cart)) }, [cart])
   useEffect(() => {
@@ -122,7 +125,7 @@ export default function CustomerPortal({ products, orders, drivers, session, onP
       <div className="order-type-tabs"><button className={type === 'Entrega' ? 'selected' : ''} onClick={() => setType('Entrega')}>Entrega</button><button className={type === 'Retirada' ? 'selected' : ''} onClick={() => setType('Retirada')}>Retirada no balcão</button></div>
       <label className="field-label">Nome completo<input value={name} onChange={event => setName(event.target.value)} autoComplete="name" /></label><label className="field-label">Celular com DDD<input value={maskPhone(phone)} onChange={event => setPhone(digits(event.target.value).slice(0,11))} inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" /></label>
       {type === 'Entrega' && <><label className="field-label">Endereço salvo<select value={address.id||''} onChange={event => { const selected = savedAddresses.find(item => item.id === event.target.value); setAddress(selected ? { ...emptyAddress, ...selected, pin_confirmed: !!selected.pin_confirmed_at } : emptyAddress) }}><option value="">Preencher novo endereço</option>{savedAddresses.map(item => <option key={item.id} value={item.id}>{item.label} · {item.street}, {item.street_number || 's/n'}</option>)}</select></label><DeliveryAddress value={address} onChange={setAddress} restaurant={restaurant} client={supabase}/><button className="text-button" disabled={!addressIsComplete(address)} onClick={saveAddress}>{address.id?'Salvar alterações do endereço':'Salvar este endereço'}</button></>}
-      <label className="field-label">Pagamento<select value={payment} onChange={event => setPayment(event.target.value)}><option value="cash">Na entrega ou retirada</option>{restaurant?.accepts_manual_pix && <option value="manual_pix">Pix manual, sujeito à conferência</option>}</select></label>
+      <label className="field-label">Pagamento<select value={payment} onChange={event => setPayment(event.target.value)}>{restaurant?.accepts_cash !== false && <option value="cash">Na entrega ou retirada</option>}{restaurant?.accepts_manual_pix && <option value="manual_pix">Pix manual, sujeito à conferência</option>}</select></label>
       <div className="cart-total"><span>Pratos {money(subtotal)}{type === 'Entrega' && <> · entrega {money(fee)}</>}</span><b>{money(subtotal + fee)}</b></div>{error && <div className="checkout-error" role="alert">{error}</div>}<button className="button button-yellow cart-submit" disabled={!canSubmit || busy} onClick={submit}>{busy ? 'Confirmando pedido…' : 'Confirmar pedido'} <ArrowRight size={16}/></button></section></div>}
   </div>
 }

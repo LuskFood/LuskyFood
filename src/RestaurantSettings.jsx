@@ -16,6 +16,7 @@ export default function RestaurantSettings({ restaurant, onSaved }) {
   const save=async()=>{
     if(!supabase){setMessage('Conecte o Supabase para salvar a operação real.');return}
     if(!form.name?.trim()||digits(form.zip_code).length!==8||!form.street?.trim()||!form.street_number?.trim()||!form.city?.trim()||!form.state?.trim()||form.latitude==null||form.longitude==null){setMessage('Preencha endereço completo e confirme a posição do restaurante.');return}
+    if(!form.accepts_cash&&!form.accepts_manual_pix){setMessage('Ative pelo menos uma forma de pagamento antes de salvar.');return}
     setBusy(true);setMessage('Salvando…')
     const payload={name:form.name.trim(),zip_code:digits(form.zip_code),street:form.street.trim(),street_number:form.street_number.trim(),district:form.district.trim(),city:form.city.trim(),state:form.state.trim().toUpperCase(),latitude:Number(form.latitude),longitude:Number(form.longitude),delivery_radius_km:Number(form.delivery_radius_km),delivery_fee:Number(form.delivery_fee),accepts_cash:!!form.accepts_cash,accepts_manual_pix:!!form.accepts_manual_pix,updated_at:new Date().toISOString()}
     const {data,error}=await supabase.from('lusky_restaurant_settings').update(payload).eq('id',1).select().single()
