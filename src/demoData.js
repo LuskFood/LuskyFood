@@ -8,8 +8,8 @@ export const demoRestaurant = {
 }
 
 export const demoDrivers = [
-  { id: 'demo-motoboy', full_name: 'Rafael Almeida', phone: '11900000003', driver_code: 'MB-001', active: true, document_valid: true, vehicle_brand: 'Honda', vehicle_model: 'CG 160', vehicle_color: 'Preta', vehicle_plate: 'ABC1D23' },
-  { id: 'demo-motoboy-2', full_name: 'Bruna Santos', phone: '11900000004', driver_code: 'MB-002', active: true, document_valid: true, vehicle_brand: 'Yamaha', vehicle_model: 'Factor 150', vehicle_color: 'Vermelha', vehicle_plate: 'DEF4G56' },
+  { id: 'demo-motoboy', full_name: 'Rafael Almeida', phone: '11900000003', driver_code: 'MB-001', active: true, demo_profile: true, document_valid: false, document_type: 'CPF e CNH', document_masked: 'TESTE-CPF-001 · TESTE-CNH-001', vehicle_brand: 'Honda', vehicle_model: 'CG 160', vehicle_color: 'Preta', vehicle_plate: 'ABC1D23' },
+  { id: 'demo-motoboy-2', full_name: 'Bruna Santos', phone: '11900000004', driver_code: 'MB-002', active: true, demo_profile: true, document_valid: false, document_type: 'CPF e CNH', document_masked: 'TESTE-CPF-002 · TESTE-CNH-002', vehicle_brand: 'Yamaha', vehicle_model: 'Factor 150', vehicle_color: 'Vermelha', vehicle_plate: 'DEF4G56' },
 ]
 
 const point = [

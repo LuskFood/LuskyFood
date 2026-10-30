@@ -1,6 +1,10 @@
 # Banco de dados
 
-Projeto Supabase conectado: `mhmfqldibtcsuyqsqiqp`. As migrações de 30/10/2026 foram aplicadas, sem excluir pedidos existentes. Arquivos locais em `supabase/migrations/` de `20261029235959` a `20261030022000`. A aplicação pelo conector dividiu rotas e Pix manual em partes menores; os nomes remotos correspondentes estão no histórico do Supabase.
+> **Etapa 2:** a migração de entrega foi aplicada ao Supabase conectado. Alterações na Edge Function `lusky-maps` ainda não foram implantadas. O fluxo e as limitações atuais estão em [Entregas e rotas](etapa-2-entregas.md).
+
+> **Etapa 3:** `20261030230235_lusky_admin_customer_history.sql` adiciona RPCs administrativas paginadas para diretório/histórico de contas clientes e histórico de motoboys. Foi aplicada ao Supabase conectado. As funções privilegiadas ficam em `internal`; wrappers em `public` usam `SECURITY INVOKER` e verificam o papel administrativo no servidor.
+
+Projeto Supabase conectado: `mhmfqldibtcsuyqsqiqp` (branch `main`, produção, confirmado pelo usuário). As migrações de entrega e histórico foram aplicadas e registradas como `20261030230158` e `20261030230235`, e os arquivos locais correspondentes usam esses mesmos identificadores. As migrações antigas ainda têm divergências de nomes/versões e dois arquivos locais começam com `20261030020000`; não use `db push`, reset ou `migration repair` sem reconciliação específica. Consulte [Etapa 3](etapa-3-publicacao.md).
 
 ## Modelo
 
@@ -18,12 +22,16 @@ Projeto Supabase conectado: `mhmfqldibtcsuyqsqiqp`. As migrações de 30/10/2026
 
 Índices cobrem `(created_by,request_id)`, endereço por cliente, pedidos por estado e data, eventos/ocorrências por pedido e localização por recebimento. A rota A→B tem uma linha por pedido. Sequência de múltiplas entregas usa `route_order` na tabela de pedidos, não uma tabela de paradas independente.
 
+O histórico administrativo de cliente usa o criador autenticado do pedido apenas quando a conta atualmente tem papel `customer`. Pedidos criados por equipe não são associados por nome/telefone. A função retorna contas e pedidos em páginas e calcula indicadores no banco; alterações anteriores de papel não possuem auditoria temporal suficiente para provar o papel na data de criação.
+
 ## RPCs e estados
 
-`lusky_place_order` valida 1–30 itens, disponibilidade e preço do catálogo, tipo, pagamento, endereço/pino, cobertura e ID idempotente. Um gatilho inicia Pix manual em `pending`; outro bloqueia Novo pedido→Preparando até `confirmed`. A equipe confirma pela RPC `lusky_confirm_manual_pix`, que registra horário, autor e evento; dinheiro na entrega permanece `not_applicable` para esta confirmação. `lusky_team_transition` permite Novo pedido→Preparando→Pronto, retirada/salão Pronto→Entregue e cancelamento inicial com motivo. `lusky_assign_driver` exige entrega pronta e motoboy ativo com documento válido. `lusky_confirm_handoff` faz Pronto→Saiu para entrega com código da cozinha e Saiu para entrega→Entregue com código do cliente, bloqueando após cinco erros por 15 minutos. `lusky_kitchen_pickup_code` é só da equipe; `lusky_customer_delivery_code` é só do titular e só na etapa de entrega. `lusky_set_route_sequence`, `lusky_set_driver_availability`, `lusky_report_location`, `lusky_report_incident`, `lusky_resolve_incident` e `lusky_set_default_address` completam a operação.
+`lusky_place_order` valida 1–30 itens, disponibilidade e preço do catálogo, tipo, pagamento, endereço/pino, cobertura e ID idempotente. Um gatilho inicia Pix manual em `pending`; outro bloqueia Novo pedido→Preparando até `confirmed`. A equipe confirma pela RPC `lusky_confirm_manual_pix`, que registra horário, autor e evento. `lusky_team_transition` permite avançar preparo e pedidos de balcão. O banco conectado ainda tem caminhos antigos de confirmação de entrega; não os use para concluir entregas até a revisão e aplicação coordenada da Etapa 2. A migração local da Etapa 2 atribui motoboys válidos durante o preparo, confirma retirada com a equipe e reserva a conclusão ao motoboy com código do cliente, limite de tentativas e consumo único. As RPCs administrativas novas da Etapa 3 consultam históricos no servidor, mas dependem da migração local não aplicada.
 
 Os nomes de estado preservam compatibilidade com pedidos antigos: Novo pedido, Preparando, Pronto, Saiu para entrega, Entregue, Cancelado. Não há estado separado para aceito, atribuído, retirado ou ocorrência; atribuição e ocorrência ficam em colunas/eventos/tabela específica.
 
 ## Permissões
 
 RLS habilitada em todas as tabelas novas. Cliente lê próprios pedidos, endereços, eventos e posição de entrega ativa; motoboy lê tarefas atribuídas e reporta posição pela RPC; equipe gerencia pedidos. Escritas diretas em pedidos e códigos foram revogadas. Segurança ainda requer ensaio com JWT de cliente A/B, motoboy A/B e equipe; testes de introspecção não substituem esse ensaio.
+
+[← Índice da documentação](README.md) · [Desenvolvimento local](desenvolvimento-local.md) · [Frontend](frontend.md)

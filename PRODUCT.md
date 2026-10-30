@@ -10,7 +10,7 @@ web
 
 - **Administrador:** administra a operação completa da Lusky Food.
 - **Cliente:** cria uma conta para consultar o cardápio, fazer pedidos e acompanhar o próprio pedido, incluindo o trajeto da entrega.
-- **Motoboy:** consulta as entregas atribuídas, segue a sequência de rota definida para ele e confirma retirada e entrega usando códigos.
+- **Motoboy:** consulta as entregas atribuídas e a sequência de rota; a equipe confirma a retirada e o motoboy confirma a entrega com o código do cliente.
 
 ## Product Purpose
 
@@ -21,7 +21,7 @@ A Lusky Food é um sistema web para operar um restaurante, receber pedidos onlin
 - O administrador gerencia as informações e a operação do restaurante.
 - O cliente precisa se cadastrar. Seu acesso se limita ao cardápio e aos próprios pedidos.
 - O pedido passa pelas fases de recebimento, produção, entrega com acompanhamento no mapa e finalização.
-- Quando o pedido está pronto, a Lusky fornece o código de retirada ao motoboy. Na entrega, o cliente fornece o código de confirmação, que o motoboy consulta para concluir o pedido.
+- Quando o pedido está pronto, a equipe confere o número e o motoboy atribuído e confirma a retirada. Na entrega, o cliente fornece seu código ao motoboy.
 - O motoboy vê os dados do cliente necessários para a entrega e a ordem de rota que lhe foi atribuída.
 
 ## Capabilities and Constraints
@@ -51,5 +51,5 @@ A Lusky Food é um sistema web para operar um restaurante, receber pedidos onlin
 
 - Cada papel acessa as informações e ações necessárias ao seu trabalho.
 - Clientes acompanham o andamento do próprio pedido do recebimento à entrega.
-- Retirada e entrega são confirmadas com códigos nos pontos correspondentes do fluxo.
+- A equipe confirma a retirada; o cliente fornece ao motoboy o código individual de entrega.
 - A operação precisa ajudar a administração a reduzir erros e melhorar o controle de pedidos, vendas e estoque.

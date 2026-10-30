@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { roadRoutePoints, validMapPoint } from './delivery'
 
 const tileUrl = import.meta.env.VITE_MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const icon = (symbol, color) => L.divIcon({ className: 'lusky-map-marker', html: `<span style="background:${color}">${symbol}</span>`, iconSize: [32, 32], iconAnchor: [16, 16] })
@@ -34,18 +35,16 @@ export function PinPicker({ point, onPick }) {
   </MapContainer></div>
 }
 
-export default function DeliveryMap({ restaurant, destination, rider, route }) {
-  const points = [restaurant, destination, rider].filter(point => point && point.latitude != null && point.longitude != null && Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))).map(point => [Number(point.latitude), Number(point.longitude)])
+export default function DeliveryMap({ restaurant, destination, rider, route, routeLabel = 'Retirada → entrega' }) {
+  const points = [restaurant, destination, rider].filter(validMapPoint).map(point => [Number(point.latitude), Number(point.longitude)])
   if (!points.length) return <div className="map-unavailable">Este pedido ainda não tem pinos confirmados. Configure a retirada no ADM e confirme o destino no cadastro do pedido.</div>
-  const line = route?.geometry?.coordinates?.map(([lng, lat]) => [lat, lng]) || []
-  const endpoints = [restaurant, destination].filter(point => point && Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))).map(point => [Number(point.latitude), Number(point.longitude)])
+  const line = roadRoutePoints(route?.geometry)
   return <div className="delivery-map"><MapContainer center={points[0]} zoom={14} scrollWheelZoom={false} className="leaflet-canvas">
     <TileLayer url={tileUrl} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
-    <MapFocus points={points} />
-    {restaurant && <Marker position={[restaurant.latitude, restaurant.longitude]} icon={kitchenIcon} />}
-    {destination && <Marker position={[destination.latitude, destination.longitude]} icon={destinationIcon} />}
-    {rider && <Marker position={[rider.latitude, rider.longitude]} icon={riderIcon} />}
-    {line.length > 1 && <Polyline positions={line} pathOptions={{ color: '#f0472b', weight: 5, opacity: .95, dashArray: '10 10' }} />}
-    {line.length < 2 && endpoints.length === 2 && <Polyline positions={endpoints} pathOptions={{ color: '#17130d', weight: 4, opacity: .8, dashArray: '9 12' }} />}
-  </MapContainer>{endpoints.length===2&&<div className="map-legend"><span className="map-legend-dash"/> {line.length>1?'Trajeto pelas ruas · menor distância calculada':'Retirada → entrega · linha reta de referência'}</div>}</div>
+    <MapFocus points={[...points, ...line]} />
+    {validMapPoint(restaurant) && <Marker position={[Number(restaurant.latitude), Number(restaurant.longitude)]} icon={kitchenIcon} />}
+    {validMapPoint(destination) && <Marker position={[Number(destination.latitude), Number(destination.longitude)]} icon={destinationIcon} />}
+    {validMapPoint(rider) && <Marker position={[Number(rider.latitude), Number(rider.longitude)]} icon={riderIcon} />}
+    {line.length > 1 && <><Polyline positions={line} pathOptions={{ color: '#15120f', weight: 9, opacity: .9 }} /><Polyline positions={line} pathOptions={{ color: '#ffc21a', weight: 5, opacity: 1, dashArray: '12 10' }} /></>}
+  </MapContainer><div className="map-legend">{line.length>1?<><span className="map-legend-dash"/> {routeLabel} · rota pelas vias</>:'Rota pelas vias indisponível; os pinos continuam visíveis.'}</div></div>
 }

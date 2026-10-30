@@ -16,6 +16,19 @@ export function validMapPoint(point) {
     Math.abs(Number(point.latitude)) <= 90 && Math.abs(Number(point.longitude)) <= 180
 }
 
+// GeoJSON uses longitude, latitude; Leaflet expects latitude, longitude.
+export function roadRoutePoints(geometry) {
+  if (geometry?.type !== 'LineString' || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) return []
+  if (!geometry.coordinates.every(point => Array.isArray(point) && point.length >= 2 &&
+    typeof point[0] === 'number' && typeof point[1] === 'number' &&
+    Number.isFinite(point[0]) && Number.isFinite(point[1]) && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90)) return []
+  return geometry.coordinates.map(([longitude, latitude]) => [latitude, longitude])
+}
+
+export function validRoadRoute(route) {
+  return roadRoutePoints(route?.geometry).length >= 2 && Number.isFinite(route?.distance_m) && route.distance_m >= 0 && Number.isFinite(route?.duration_s) && route.duration_s >= 0
+}
+
 export function updateAddressField(address, field, value) {
   if (address[field] === value) return address
   const next = { ...address, [field]: value }
@@ -51,7 +64,10 @@ export async function lookupCep(value, signal) {
 }
 
 export async function mapRequest(client, body) {
-  const { data, error } = await client.functions.invoke('lusky-maps', { body })
+  let response
+  try { response = await client.functions.invoke('lusky-maps', { body }) }
+  catch { throw new Error('Serviço de mapa indisponível. Verifique sua conexão e tente novamente.') }
+  const { data, error } = response
   if (error) {
     let message = 'Serviço de mapa indisponível. Tente novamente.'
     try { const detail = await error.context?.json?.(); if (detail?.error) message = detail.error } catch { /* network failure */ }

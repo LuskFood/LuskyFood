@@ -1,19 +1,34 @@
 # Documentação Lusky Food
 
-Estado em 30/10/2026. O código e as migrações estão implementados localmente; as migrações e a Edge Function foram aplicadas no projeto Supabase conectado. O build e sete testes de utilidades passaram. O endereço de retirada Rua Otusco, 196, Capão Redondo, São Paulo/SP está salvo no banco, e o ADM pode alterá-lo em Configurações. O pino exato ainda precisa de confirmação. A demonstração local inclui pedidos, clientes, motoboys, indicadores e mapas com linha reta tracejada; a gestão de usuários real continua disponível apenas ao ADM conectado. A chave HeiGIT, testes com contas separadas em aparelhos reais, hospedagem HTTPS e publicação GitHub ainda dependem de configuração/acesso. Portanto o rastreamento com provedor real ainda não foi validado.
+Documentação técnica do repositório. Revisada em 30/10/2026 durante a finalização da Etapa 3.
+
+## Estado desta etapa
+
+A Etapa 2 prepara localmente o fluxo de entrega e mapas. A Etapa 3 adiciona consultas administrativas paginadas e prepara o Netlify. Migrações e função de mapas locais ainda não foram implantadas no Supabase conectado; rotas reais, teste ponta a ponta com contas QA e integração Netlify ainda aguardam configuração. Veja [Entregas e rotas](etapa-2-entregas.md) e [Etapa 3](etapa-3-publicacao.md).
+
+A demonstração local contém registros fictícios e não sincroniza com o Supabase. Perfis de motoboy da demonstração são identificados como fictícios e seus documentos não estão verificados.
 
 ## Índice
 
-- [Arquitetura](arquitetura.md)
-- [Banco de dados](banco-de-dados.md)
-- [APIs e custos](apis-e-custos.md)
-- [Integrações e publicação](integracoes.md)
+### Produto e interface
+- [Etapa 2: entregas e rotas](etapa-2-entregas.md)
+- [Etapa 3: segurança e preparação da publicação](etapa-3-publicacao.md)
+- [Desenvolvimento local e problemas comuns](desenvolvimento-local.md)
+- [Frontend e estrutura de pastas](frontend.md)
 - [UX e fluxos](ux-e-fluxos.md)
+- [Arquitetura](arquitetura.md)
+
+### Dados e operação
+- [Banco de dados e permissões](banco-de-dados.md)
 - [Segurança e privacidade](seguranca-e-privacidade.md)
+- [Operação diária](operacao.md)
+- [APIs e custos](apis-e-custos.md)
+
+### Entrega e validação
+- [Integrações e publicação](integracoes.md)
 - [Testes e aceite](testes-e-aceite.md)
-- [Operação](operacao.md)
 - [Prompt original](PROMPT-CODEX.md)
 
 ## Manutenção
 
-Toda alteração de esquema deve gerar nova migração em `supabase/migrations/`; as já aplicadas são imutáveis. Revise o documento correspondente e execute `npm test` e `npm run build`. Nunca grave chaves, senhas, documentos ou dados de clientes nesta pasta.
+Atualize o documento ligado à área modificada e confira seus links relativos. Alterações de banco ou Edge Function exigem revisão própria e registro de migrações; não reaplique arquivos já aplicados. Antes de compartilhar alterações, confira `git status`, o diff e os arquivos ignorados. Nunca inclua `.env` real, tokens, senhas, documentos pessoais ou dados de clientes nesta pasta.

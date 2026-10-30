@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addressIsComplete, addressLocationKey, distanceKm, digits, lookupCep, mapRequest, maskCep, maskCpf, maskPhone, updateAddressField, validMapPoint } from '../src/delivery.js'
+import { addressIsComplete, addressLocationKey, distanceKm, digits, lookupCep, mapRequest, maskCep, maskCpf, maskPhone, updateAddressField, validMapPoint, roadRoutePoints, validRoadRoute } from '../src/delivery.js'
 
 test('masks accept digits and pasted punctuation without losing numbers', () => {
   assert.equal(maskCep('01.001-000'), '01001-000')
@@ -54,4 +54,17 @@ test('CEP lookup keeps manual fallback on not found and outage', async () => {
 test('map function reports server errors without showing success', async () => {
   const client = { functions:{ invoke:async () => ({ data:null, error:{ message:'failed', context:{ json:async () => ({ error:'Cota atingida.' }) } } }) } }
   await assert.rejects(mapRequest(client,{ action:'route' }), /Cota atingida/)
+})
+
+test('road geometry converts longitude/latitude and rejects invalid or missing routes', () => {
+  const geometry = {type:'LineString',coordinates:[[-46.77,-23.65],[-46.769,-23.651],[-46.768,-23.651]]}
+  assert.deepEqual(roadRoutePoints(geometry),[[-23.65,-46.77],[-23.651,-46.769],[-23.651,-46.768]])
+  assert.equal(validRoadRoute({geometry,distance_m:250,duration_s:80}),true)
+  for(const invalid of [null,{type:'Point',coordinates:[-46,-23]},{type:'LineString',coordinates:[[-46,-23]]},{type:'LineString',coordinates:[[-46,-23],[999,-23]]},{type:'LineString',coordinates:[[null,-23],[-46,-23]]}]) assert.deepEqual(roadRoutePoints(invalid),[])
+  assert.equal(validRoadRoute({geometry,distance_m:null,duration_s:80}),false)
+})
+
+test('map network failure returns a clear error without inventing a route', async () => {
+  const client={functions:{invoke:async()=>{throw new Error('network down')}}}
+  await assert.rejects(mapRequest(client,{action:'route'}),/conexão/)
 })

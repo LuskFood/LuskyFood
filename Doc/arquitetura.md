@@ -1,5 +1,7 @@
 # Arquitetura
 
+> **Etapa 2 local:** há uma nova migração e alterações na função de mapas ainda não implantadas. O fluxo e as limitações atuais estão em [Entregas e rotas](etapa-2-entregas.md).
+
 ```mermaid
 flowchart LR
   C[Cliente React] --> S[Supabase Auth e Postgres]
@@ -21,3 +23,5 @@ O pedido é criado por `lusky_place_order`: o banco valida itens, disponibilidad
 `lusky_orders` e `lusky_driver_locations` estão na publicação Realtime. A interface relê o banco após inscrição e periodicamente no acompanhamento. Posição observada é diferente da rota planejada; o ETA usa vias de perfil `driving-car` sem trânsito. O mapa Leaflet usa tiles com atribuição. O rastreamento requer HTTPS, permissão do navegador e app do motoboy ativo; não há rastreamento confiável em segundo plano com a página fechada.
 
 Limitações atuais: a Central consulta filtros e páginas de 20 pedidos no servidor, mas resumo, clientes e relatórios ainda carregam todos os pedidos em blocos de 500 e calculam agregados no navegador; otimização sugere sequência para um motoboy, sem distribuir entregas entre motoboys; cache e limite de taxa da Edge Function são por instância; notificações são dentro da página, sem push externo.
+
+[← Índice da documentação](README.md) · [Desenvolvimento local](desenvolvimento-local.md) · [Frontend](frontend.md)

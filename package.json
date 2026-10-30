@@ -19,6 +19,7 @@
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.13",
     "@vitejs/plugin-react": "^5.0.4",
     "vite": "^7.1.7"
   }

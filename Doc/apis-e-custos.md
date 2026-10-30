@@ -17,3 +17,5 @@ A chave HeiGIT é `HEIGIT_API_KEY` e fica só no segredo da Edge Function. Ainda
 A Edge Function limita a 12 chamadas por usuário/minuto e 8 s por chamada, com cache em memória: geocódigo 24 h, rota/otimização 10 min. O cache e limitador são locais à instância e não constituem cota global. GPS é enviado no mínimo a cada 15 s pelo cliente e o servidor também limita frequência. Um motoboy ativo por 8 h pode gerar até 1.920 atualizações de posição/dia; cada assinante Realtime pode receber até esse volume, além de leituras periódicas. Compare com o plano Supabase antes de ampliar a frota.
 
 `driving-car` aproxima o trajeto de moto; não há trânsito ao vivo nem promessa de rota legalmente adequada a motocicletas. A tela separa rota estimada, cálculo e GPS observado. A distância de cobertura é geodésica, não a distância viária. Para tráfego maior, contratar tiles hospedados ou self-host, cache/limite distribuído, agregação GPS e validar custo antes de escalar.
+
+[← Índice da documentação](README.md) · [Desenvolvimento local](desenvolvimento-local.md) · [Frontend](frontend.md)

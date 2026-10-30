@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Bike, CheckCircle2, Clock, LogOut, MapPin, Minus, Plus, ShoppingBag, UserRound, UtensilsCrossed, X } from 'lucide-react'
 import DeliveryAddress from './DeliveryAddress'
 import { PasswordChangeForm } from './AccountSettings'
-import { addressIsComplete, distanceKm, emptyAddress, mapRequest, maskPhone, digits } from './delivery'
+import { addressIsComplete, distanceKm, emptyAddress, mapRequest, maskPhone, digits, validRoadRoute } from './delivery'
 import { supabase } from './supabase'
 
 const DeliveryMap = lazy(() => import('./DeliveryMap'))
@@ -11,10 +11,22 @@ const formatTime = value => value ? new Date(value).toLocaleString('pt-BR', { da
 const cartKey = 'lusky-customer-cart-v2'
 const notesKey = 'lusky-customer-notes-v1'
 
-function HistoryEntry({ order }) {
+function HistoryEntry({ order, session }) {
   const [open,setOpen]=useState(false)
   const [events,setEvents]=useState([])
   const [historyError,setHistoryError]=useState('')
+  const [deliveryCode,setDeliveryCode]=useState('')
+  const [codeError,setCodeError]=useState('')
+  const [codeRetry,setCodeRetry]=useState(0)
+  useEffect(()=>{
+    setDeliveryCode(''); setCodeError('')
+    if(!open||order.type!=='Entrega'||order.status!=='Saiu para entrega')return
+    if(session?.localDemo){setDeliveryCode(order.delivery_code||'');return}
+    if(!supabase){setCodeError('Sem conexão para consultar o código.');return}
+    let alive=true
+    supabase.rpc('lusky_customer_delivery_code',{p_order_number:Number(String(order.id).replace(/\D/g,''))}).then(({data,error})=>{if(alive){if(error||!data)setCodeError('Código indisponível nesta conta.');else setDeliveryCode(data)}}).catch(()=>{if(alive)setCodeError('Sem conexão para consultar o código.')})
+    return()=>{alive=false}
+  },[open,order.id,order.status,order.type,order.delivery_code,session?.localDemo,codeRetry])
   useEffect(()=>{
     if(!open||!supabase||!order.db_id)return
     let alive=true
@@ -26,7 +38,7 @@ function HistoryEntry({ order }) {
     return()=>{alive=false}
   },[open,order.db_id,order.status])
   return <details className="order-history-entry" onToggle={event=>setOpen(event.currentTarget.open)}><summary><b>{order.id}</b><span>{order.status} · {order.type} · {money(order.total)}</span><small>{formatTime(order.created_at)}</small></summary>
-    <div className="order-history-detail"><p><b>Itens:</b> {order.items?.map(item=>`${item.quantity}× ${item.name}${item.note?` (${item.note})`:''}`).join(' · ')||'Sem itens registrados'}</p>{order.type==='Entrega'&&<p><b>Endereço usado:</b> {order.address||order.delivery_snapshot?.street||'Pedido antigo sem endereço estruturado'}</p>}{order.payment_method==='manual_pix'&&<p><b>Pix manual:</b> {order.payment_status==='confirmed'?'Conferido pela equipe':'Aguardando conferência'}</p>}{historyError&&<p role="alert">{historyError}</p>}{events.length>0&&<ol>{events.map((item,index)=><li key={index}><time>{formatTime(item.created_at)}</time> · {item.to_status}{item.reason&&` · ${item.reason}`}</li>)}</ol>}</div>
+    <div className="order-history-detail"><p><b>Itens:</b> {order.items?.map(item=>`${item.quantity}× ${item.name}${item.note?` (${item.note})`:''}`).join(' · ')||'Sem itens registrados'}</p>{order.type==='Entrega'&&<p><b>Endereço usado:</b> {order.address||order.delivery_snapshot?.street||'Pedido antigo sem endereço estruturado'}</p>}{deliveryCode&&<p><b>Código para o motoboy na chegada: {deliveryCode}</b></p>}{codeError&&<p role="alert">{codeError} <button className="text-button" onClick={()=>setCodeRetry(value=>value+1)}>Tentar novamente</button></p>}{order.payment_method==='manual_pix'&&<p><b>Pix manual:</b> {order.payment_status==='confirmed'?'Conferido pela equipe':'Aguardando conferência'}</p>}{historyError&&<p role="alert">{historyError}</p>}{events.length>0&&<ol>{events.map((item,index)=><li key={index}><time>{formatTime(item.created_at)}</time> · {item.to_status}{item.reason&&` · ${item.reason}`}</li>)}</ol>}</div>
   </details>
 }
 
@@ -48,8 +60,12 @@ export default function CustomerPortal({ products, orders, drivers, session, onP
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [handoffCode, setHandoffCode] = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [codeRetry, setCodeRetry] = useState(0)
   const [route, setRoute] = useState(null)
   const [routeError, setRouteError] = useState('')
+  const [routeRetry, setRouteRetry] = useState(0)
+  const [routeBusy, setRouteBusy] = useState(false)
   const [driverLocation, setDriverLocation] = useState(null)
   const [clock, setClock] = useState(Date.now())
   const ownOrders = useMemo(() => orders.filter(order => order.created_by === user?.id || (session?.localDemo && order.localCustomer === user?.email)), [orders, user?.id, user?.email, session?.localDemo])
@@ -79,18 +95,21 @@ export default function CustomerPortal({ products, orders, drivers, session, onP
     return () => { alive = false }
   }, [user?.id, session?.localDemo])
   useEffect(() => {
-    if (!active || active.status !== 'Saiu para entrega' || session?.localDemo || !supabase) { setHandoffCode(''); return }
+    setHandoffCode(''); setCodeError('')
+    if (!active || active.status !== 'Saiu para entrega') return
+    if (session?.localDemo) { setHandoffCode(active.delivery_code || ''); return }
+    if (!supabase) { setCodeError('Conecte-se para consultar o código da entrega.'); return }
     let alive = true
-    supabase.rpc('lusky_customer_delivery_code', { p_order_number: Number(String(active.id).replace(/\D/g,'')) }).then(({ data }) => { if (alive) setHandoffCode(data || '') })
+    supabase.rpc('lusky_customer_delivery_code', { p_order_number: Number(String(active.id).replace(/\D/g,'')) }).then(({ data, error }) => { if (alive) { if (error || !data) setCodeError('Não foi possível obter o código nesta conta. Atualize e tente novamente.'); else setHandoffCode(data) } }).catch(()=>{if(alive)setCodeError('Sem conexão para consultar o código. Tente novamente.')})
     return () => { alive = false }
-  }, [active?.id, active?.status, session?.localDemo])
+  }, [active?.id, active?.status, active?.delivery_code, session?.localDemo, codeRetry])
   useEffect(() => {
-    if (!supabase || session?.localDemo || active?.delivery_latitude == null || active?.type !== 'Entrega') { setRoute(null); return }
+    if (!supabase || session?.localDemo || active?.delivery_latitude == null || active?.type !== 'Entrega') { setRoute(null); setRouteBusy(false); setRouteError(''); return }
     let alive = true
-    setRouteError('')
-    mapRequest(supabase, { action: 'route', order_number: Number(String(active.id).replace(/\D/g,'')) }).then(result => { if (alive) setRoute(result) }).catch(err => { if (alive) setRouteError(err.message) })
+    setRoute(null); setRouteError(''); setRouteBusy(true)
+    mapRequest(supabase, { action: 'route', order_number: Number(String(active.id).replace(/\D/g,'')) }).then(result => { if (alive) { if(validRoadRoute(result)) setRoute(result); else setRouteError('O provedor não retornou uma rota viária válida.') } }).catch(err => { if (alive) setRouteError(err.message) }).finally(()=>{if(alive)setRouteBusy(false)})
     return () => { alive = false }
-  }, [active?.id, active?.delivery_latitude, active?.delivery_longitude, restaurant?.latitude, restaurant?.longitude])
+  }, [active?.id, active?.delivery_latitude, active?.delivery_longitude, restaurant?.latitude, restaurant?.longitude, routeRetry])
   useEffect(() => {
     if (!supabase || session?.localDemo || !assignedDriver || active?.status !== 'Saiu para entrega') { setDriverLocation(null); return }
     let alive = true
@@ -142,9 +161,9 @@ export default function CustomerPortal({ products, orders, drivers, session, onP
       <section className="customer-menu-section" id="menu-cliente"><div className="customer-section-heading"><div><h2>Qual vai ser hoje?</h2><p>Pratos disponíveis agora.</p></div></div><div className="customer-dish-grid">{products.filter(product => product.available).map(product => <article className="customer-dish" key={product.id}><div className="customer-dish-photo">{product.image_url && <img src={product.image_url} alt={product.name} loading="lazy"/>}<button className="dish-add" aria-label={`Adicionar ${product.name}`} onClick={() => change(product.id, 1)}><Plus size={20}/></button></div><div className="customer-dish-info"><div><h3>{product.name}</h3><b>{money(product.price)}</b></div><p>{product.description}</p>{cart[product.id] > 0 && <b>{cart[product.id]} no carrinho</b>}</div></article>)}</div></section>
       </>}{section==='orders'&&<section className="customer-tracking" id="acompanhar"><div className="tracking-heading"><h2>Meus pedidos</h2></div>{notice && <p role="status" className="checkout-success"><CheckCircle2 size={16}/>{notice}</p>}{active ? <div className="tracking-card"><div className="tracking-order-summary"><span className="order-ticket">{active.id}</span><div><b>{active.status}</b><small>{active.items?.map(item => `${item.quantity}× ${item.name}`).join(' · ')}</small><small>{money(active.total)} · {formatTime(active.created_at)}</small></div></div>
         {active.payment_method==='manual_pix'&&<div className="manual-pix-note"><b>{active.payment_status==='confirmed'?'Pix manual conferido pela equipe.':'Pix manual aguardando conferência da equipe.'}</b>{active.payment_status!=='confirmed'&&<p>{restaurant?.manual_pix_instructions}</p>}</div>}
-        {active.type === 'Entrega' && <><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={{ latitude: active.delivery_latitude, longitude: active.delivery_longitude }} rider={freshPosition||active.demo_position} route={route} /></Suspense><p className="map-state">{route ? `Rota planejada: ${(route.distance_m / 1000).toFixed(1)} km · cerca de ${Math.ceil(route.duration_s / 60)} min · calculada ${formatTime(route.calculated_at)}. Perfil carro, sem trânsito ao vivo.` : routeError || (active.delivery_latitude==null||restaurant?.latitude==null ? 'Origem ou destino sem pino confirmado.' : session?.localDemo ? 'Demonstração: linha reta entre os pinos; trajeto por vias não calculado.' : 'Aguardando cálculo da rota.')}</p><p className="map-state">{freshPosition ? `GPS observado ${formatTime(freshPosition.observed_at)} · precisão ${Math.round(freshPosition.accuracy_m)} m.` : driverLocation ? `Último GPS de ${formatTime(driverLocation.observed_at)} está desatualizado.` : active.demo_position ? 'Posição simulada do motoboy nesta demonstração.' : 'Motoboy ainda não compartilhou GPS.'}</p></>}
-        {assignedDriver && <p><Bike size={15}/> Motoboy: {assignedDriver.full_name} · {assignedDriver.driver_code}</p>}{handoffCode && <div className="handoff-code"><b>Código para entregar ao motoboy na chegada: {handoffCode}</b></div>}</div> : <div className="tracking-empty"><ShoppingBag size={22}/><b>Seu próximo pedido aparece aqui.</b></div>}
-        {ownOrders.length > 0 && <div className="order-history"><h3>Histórico</h3>{ownOrders.map(order => <HistoryEntry key={order.id} order={order}/>)}</div>}</section>}{section==='account'&&<section className="customer-profile panel" id="minha-conta"><h2>Minha conta</h2><p>Cliente · {user?.email}</p>{preview&&<p className="account-error">Prévia da experiência do cliente. Alterações da conta estão desativadas.</p>}{!preview&&!session?.localDemo&&digits(phone).length!==11&&<p className="account-error" role="status">Celular pendente nesta conta antiga. Informe seu número com DDD e salve para completar o perfil.</p>}<div className="settings-two"><label className="field-label">Nome completo<input autoComplete="name" value={name} onChange={event=>setName(event.target.value)} disabled={preview||session?.localDemo}/></label><label className="field-label">Celular com DDD · obrigatório<input inputMode="tel" autoComplete="tel" value={maskPhone(phone)} onChange={event=>setPhone(digits(event.target.value).slice(0,11))} disabled={preview||session?.localDemo}/></label></div><label className="field-label">E-mail<input type="email" autoComplete="email" value={email} onChange={event=>setEmail(event.target.value)} disabled={preview||session?.localDemo}/></label><button className="button button-dark" onClick={saveProfile} disabled={preview||session?.localDemo}>Salvar informações</button>{error&&<p className="checkout-error" role="alert">{error}</p>}<PasswordChangeForm disabled={preview||!!session?.localDemo}/><div className="saved-addresses"><h3>Endereços salvos</h3>{savedAddresses.length?savedAddresses.map(item=><div key={item.id}><b>{item.label}{item.is_default?' · padrão':''}</b><span>{item.street}, {item.street_number||'s/n'} · {item.city}/{item.state}</span><div><button className="text-button" onClick={()=>{setAddress({...emptyAddress,...item,pin_confirmed:!!item.pin_confirmed_at});setCartOpen(true);setType('Entrega')}}>Editar ou usar</button>{!item.is_default&&<button className="text-button" onClick={()=>makeDefault(item)}>Tornar padrão</button>}<button className="text-button" onClick={()=>removeAddress(item)}>Excluir</button></div></div>):<p>Nenhum endereço salvo.</p>}</div><div className="account-exit"><span>Encerre a sessão neste aparelho quando terminar.</span><button className="button button-secondary" onClick={onSignOut}><LogOut size={16}/>Sair da conta</button></div></section>}</main>
+        {active.type === 'Entrega' && <><div className="delivery-route-addresses"><p><b>Retirada:</b> {restaurant?.street ? `${restaurant.street}, ${restaurant.street_number || 's/n'} · ${restaurant.city || ''} ${restaurant.state || ''}` : 'Endereço do restaurante não informado'}</p><p><b>Entrega:</b> {active.address || 'Endereço não informado'}</p></div><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={{ latitude: active.delivery_latitude, longitude: active.delivery_longitude }} rider={freshPosition||active.demo_position} route={route} /></Suspense><p className="map-state">{route ? `Rota planejada: ${(route.distance_m / 1000).toFixed(1)} km · cerca de ${Math.ceil(route.duration_s / 60)} min · calculada ${formatTime(route.calculated_at)}. Perfil carro, sem trânsito ao vivo.` : routeError || (active.delivery_latitude==null||restaurant?.latitude==null ? 'Origem ou destino sem pino confirmado.' : session?.localDemo ? 'Demonstração: rota pelas vias não calculada.' : routeBusy?'Calculando rota pelas vias…':'Rota pelas vias indisponível.')}</p>{routeError&&active.db_id&&<button className="text-button" disabled={routeBusy} onClick={()=>setRouteRetry(value=>value+1)}>Tentar calcular rota novamente</button>}<p className="map-state">{freshPosition ? `GPS observado ${formatTime(freshPosition.observed_at)} · precisão ${Math.round(freshPosition.accuracy_m)} m.` : driverLocation ? `Último GPS de ${formatTime(driverLocation.observed_at)} está desatualizado.` : active.demo_position ? 'Posição simulada do motoboy nesta demonstração.' : 'Motoboy ainda não compartilhou GPS.'}</p></>}
+        {assignedDriver && <p><Bike size={15}/> Motoboy: {assignedDriver.full_name} · {assignedDriver.driver_code}</p>}{handoffCode && <div className="handoff-code"><b>Código para entregar ao motoboy na chegada: {handoffCode}</b></div>}{codeError&&<p className="checkout-error" role="alert">{codeError} <button className="text-button" onClick={()=>setCodeRetry(value=>value+1)}>Tentar novamente</button></p>}</div> : <div className="tracking-empty"><ShoppingBag size={22}/><b>Seu próximo pedido aparece aqui.</b></div>}
+        {ownOrders.length > 0 && <div className="order-history"><h3>Histórico</h3>{ownOrders.map(order => <HistoryEntry key={order.id} order={order} session={session}/>)}</div>}</section>}{section==='account'&&<section className="customer-profile panel" id="minha-conta"><h2>Minha conta</h2><p>Cliente · {user?.email}</p>{preview&&<p className="account-error">Prévia da experiência do cliente. Alterações da conta estão desativadas.</p>}{!preview&&!session?.localDemo&&digits(phone).length!==11&&<p className="account-error" role="status">Celular pendente nesta conta antiga. Informe seu número com DDD e salve para completar o perfil.</p>}<div className="settings-two"><label className="field-label">Nome completo<input autoComplete="name" value={name} onChange={event=>setName(event.target.value)} disabled={preview||session?.localDemo}/></label><label className="field-label">Celular com DDD · obrigatório<input inputMode="tel" autoComplete="tel" value={maskPhone(phone)} onChange={event=>setPhone(digits(event.target.value).slice(0,11))} disabled={preview||session?.localDemo}/></label></div><label className="field-label">E-mail<input type="email" autoComplete="email" value={email} onChange={event=>setEmail(event.target.value)} disabled={preview||session?.localDemo}/></label><button className="button button-dark" onClick={saveProfile} disabled={preview||session?.localDemo}>Salvar informações</button>{error&&<p className="checkout-error" role="alert">{error}</p>}<PasswordChangeForm disabled={preview||!!session?.localDemo}/><div className="saved-addresses"><h3>Endereços salvos</h3>{savedAddresses.length?savedAddresses.map(item=><div key={item.id}><b>{item.label}{item.is_default?' · padrão':''}</b><span>{item.street}, {item.street_number||'s/n'} · {item.city}/{item.state}</span><div><button className="text-button" onClick={()=>{setAddress({...emptyAddress,...item,pin_confirmed:!!item.pin_confirmed_at});setCartOpen(true);setType('Entrega')}}>Editar ou usar</button>{!item.is_default&&<button className="text-button" onClick={()=>makeDefault(item)}>Tornar padrão</button>}<button className="text-button" onClick={()=>removeAddress(item)}>Excluir</button></div></div>):<p>Nenhum endereço salvo.</p>}</div><div className="account-exit"><span>Encerre a sessão neste aparelho quando terminar.</span><button className="button button-secondary" onClick={onSignOut}><LogOut size={16}/>Sair da conta</button></div></section>}</main>
     {count > 0 && <button className="floating-cart" onClick={() => setCartOpen(true)}><ShoppingBag size={17}/><b>{count} itens · {money(subtotal)}</b><ArrowRight size={16}/></button>}
     {cartOpen && <div className="cart-scrim" onClick={() => !busy && setCartOpen(false)}><section className="cart-drawer" onClick={event => event.stopPropagation()}><div className="cart-head"><h2>Seu pedido</h2><button className="icon-button" aria-label="Fechar carrinho" disabled={busy} onClick={() => setCartOpen(false)}><X size={18}/></button></div>
       <div className="cart-items">{products.filter(product => cart[product.id]).map(product => <div className="cart-item" key={product.id}><b>{product.name}</b><span>{money(product.price)}</span><div className="qty-control"><button onClick={() => change(product.id,-1)}><Minus size={12}/></button><b>{cart[product.id]}</b><button onClick={() => change(product.id,1)}><Plus size={12}/></button></div><label className="cart-note">Observações para este prato<input maxLength={300} value={notes[product.id]||''} onChange={event=>setNotes(current=>({...current,[product.id]:event.target.value}))} placeholder="Ex.: sem cebola"/></label></div>)}</div>

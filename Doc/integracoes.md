@@ -1,23 +1,33 @@
 # Integrações e publicação
 
+> **Etapa 2:** a migração de entrega foi aplicada; as alterações locais da função de mapas ainda não foram implantadas. O fluxo e as limitações atuais estão em [Entregas e rotas](etapa-2-entregas.md).
+
 ## Supabase
 
-Projeto conectado: `mhmfqldibtcsuyqsqiqp`. Configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local` ou no host estático. A chave publishable vai ao navegador e depende de RLS. Migrações locais `supabase/migrations/20261029235959...` até `20261030022000...` já foram aplicadas neste projeto; não as reaplique manualmente sem consultar o histórico remoto. A Edge Function `lusky-maps` está implantada com JWT obrigatório. `lusky-admin-users` versão 4 também está ativa e valida telefone antes de criar ou editar contas.
+O projeto conectado usa Supabase Auth, Postgres, RLS, Realtime e Edge Functions. Configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local` ou no host estático. A chave publishable vai ao navegador e depende de RLS. As migrações locais de `supabase/migrations/20261029235959...` até `20261030040000...` foram aplicadas no projeto conectado; consulte o histórico remoto antes de qualquer reaplicação. A Edge Function `lusky-maps` está implantada com JWT obrigatório. `lusky-admin-users` versão 4 também está ativa e valida telefone antes de criar ou editar contas.
 
 ## HeiGIT
 
-1. Crie chave gratuita HeiGIT e confira cota no painel.
-2. Configure `HEIGIT_API_KEY` como segredo da Edge Function `lusky-maps` no Supabase; nunca em `.env.local` com prefixo `VITE_` nem no Git.
-3. Na tela de Configurações, informe endereço real do restaurante, localize e confirme coordenadas, raio, taxa e meios de pagamento. Sem chave HeiGIT, a equipe pode usar o GPS do aparelho estando no restaurante ou informar latitude/longitude, ajustar no mapa e confirmar o pino. O cliente pode marcar o destino no mapa a partir da origem configurada; a escolha manual exige tocar no ponto de entrega antes da confirmação. O cálculo automático de rota continua dependente da chave.
-4. Com conta QA, teste geocódigo, rota A→B e sequência de 2 pedidos. Se houver 403/429 ou timeout, a interface informa indisponibilidade; opere manualmente conforme [operação](operacao.md).
-5. Para tiles, `VITE_MAP_TILE_URL` opcional troca o provedor. Garanta atribuição e regras de cache/referer.
+1. Crie uma chave HeiGIT e confira a cota atual no painel do provedor.
+2. Configure `HEIGIT_API_KEY` como segredo da Edge Function `lusky-maps`; nunca em `.env.local` com prefixo `VITE_` ou no Git.
+3. Em Configurações, informe o endereço real do restaurante e confirme o pino, raio, taxa e meios de pagamento. Sem a chave, a equipe ainda pode localizar a origem por GPS ou coordenadas manuais. O cliente pode marcar o destino a partir da origem confirmada.
+4. Com conta de QA, teste geocodificação, rota A→B e sequência de dois pedidos. Em indisponibilidade, opere manualmente conforme [Operação](operacao.md).
+5. `VITE_MAP_TILE_URL` pode trocar o provedor de tiles. Confira atribuição, política de cache e regras de uso.
+
+Sem uma rota calculada, o traço entre pinos é apenas uma referência direta; não representa ruas nem distância de percurso.
+
+## Escopo da etapa visual
+
+As duas migrações de entrega e histórico foram aplicadas ao projeto Supabase de produção confirmado pelo usuário. A hospedagem HTTPS, os redirecionamentos de autenticação, a publicação da versão atualizada de `lusky-maps` e a validação ponta a ponta continuam pendentes. O projeto Netlify ainda não foi confirmado.
 
 ## GitHub e frontend
 
-Destino fornecido: `https://github.com/LuskFood/LuskyFood.git`, privado. O Git local foi inicializado na branch `main`, com `origin` configurado e commit inicial `0876208`. A conexão GitHub desta sessão não tem acesso (404), e `gh` não está instalado. `git ls-remote --heads origin` e `git push -u origin main` retornaram “Repository not found”; a publicação remota não foi concluída. Uma sessão autorizada deve executar `git push -u origin main` sem `force`, verificar branch/commit e a pasta `Doc/`.
+Destino configurado: repositório privado `https://github.com/LuskFood/LuskyFood.git`. O histórico local está na branch `main`. A conexão GitHub desta sessão não tinha acesso (404) e `gh` não estava instalado; a publicação remota não foi concluída. Uma sessão autorizada deverá confirmar acesso e publicar sem `force`, verificando branch, commit e pasta `Doc/`.
 
-Publique `dist/` em host estático HTTPS com fallback SPA. Configure somente variáveis públicas do Vite no host, redirecionamentos Auth para domínio HTTPS, cache de assets e rollback pelo commit anterior. Migrações/Edge Function no Supabase são publicação separada. GPS web requer HTTPS e permissão do aparelho.
+A hospedagem estática requer `dist/`, fallback SPA, domínio HTTPS e redirecionamentos Auth para o domínio publicado. Configure no host somente variáveis públicas do Vite. A publicação do frontend é separada das migrações e Edge Functions do Supabase. GPS web requer HTTPS e permissão do aparelho.
 
 ## Checagem pré-produção
 
-`npm test`, `npm run build`, chaves e origem, RLS com cinco papéis, Realtime entre sessões, fluxo de códigos, aparelho real, limite da API, pagamento manual, backup e rollback.
+`npm test`, `npm run build`, chaves e origem, RLS com papéis distintos, Realtime entre sessões, fluxo de códigos, aparelho real, cota da API, pagamento manual, backup e rollback.
+
+[← Índice da documentação](README.md) · [Desenvolvimento local](desenvolvimento-local.md) · [Frontend](frontend.md)
