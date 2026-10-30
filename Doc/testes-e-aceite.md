@@ -2,11 +2,17 @@
 
 ## Executado em 30/10/2026
 
-- `npm test`: 5 testes passaram (máscaras, completude do endereço, cobertura, ViaCEP encontrado/indisponível, erro da função de mapa).
-- `npm run build`: passou. O bundle principal ainda emite aviso acima de 500 kB (~560 kB); mapa é carregado separadamente.
+- `npm test`: 6 testes passaram (máscaras, completude do endereço, invalidação de pino após alteração, cobertura, ViaCEP encontrado/indisponível, erro da função de mapa).
+- `npm run build`: passou sem aviso de chunk acima de 500 kB. Bundle principal ~340 kB, Supabase ~224 kB e mapa ~156 kB, em chunks separados.
 - Migrações aplicadas no Supabase conectado e tabelas novas/RLS/publicação Realtime inspecionadas. `lusky_orders` e `lusky_driver_locations` estão na publicação. Escrita direta em pedido e leitura direta de códigos foram revogadas; RPC antiga de checkout não é executável por `authenticated`.
 - Edge Function `lusky-maps` implantada, versão 2, JWT obrigatório. Falta chave HeiGIT, portanto chamadas reais a Pelias, Directions e VROOM não foram executadas.
-- A tentativa de abrir o Vite no navegador local falhou por isolamento de loopback deste ambiente; a revisão visual e interação das telas não foram validadas.
+- Em 30/10/2026, a aba local `localhost:5173` permitiu inspeção do painel em viewport móvel e desktop. Foram abertas Central de pedidos, detalhes de pedido legado, Clientes, Relatórios, Configurações, editor de prato, formulário de entrega do ADM e prévia do cliente, sem gravar dados. A inspeção revelou e corrigiu texto ilegível sobre fundos escuros e erro de runtime no mapa causado por JSX sem import do React. O pedido legado sem coordenadas passou a mostrar fallback honesto. A rota real, o GPS e a criação de pedido ainda exigem ensaio ponta a ponta com chave/configuração e contas QA.
+- Na Central conectada, filtros de status e busca por `LF-1` retornaram respectivamente zero e um pedido, com contagem do servidor. A consulta usa `range` de 20 linhas; navegação para página 2 ainda não pôde ser observada porque o projeto tem um pedido.
+- Em transações SQL revertidas, JWTs simulados para cliente dono/sem vínculo, motoboy atribuído/sem vínculo e equipe retornaram, respectivamente, 1/0/1/0/1 pedido visível. Eventos seguiram o mesmo vínculo. O banco não tinha rotas nem posições GPS para validar acesso positivo a essas tabelas.
+- Uma retirada de QA dentro de transação revertida confirmou ID idempotente, total do catálogo apesar de preço adulterado no corpo, e ausência de rota. Código de cozinha errado retornou `false`, conclusão antecipada foi recusada, cliente não obteve código da cozinha e motoboy não obteve código do cliente. Após `ROLLBACK`, permaneceram um pedido, três eventos e zero falhas de código persistidas.
+- Pix manual foi testado em transação revertida: pedido começou `pending`, Novo pedido→Preparando falhou, equipe confirmou via RPC, a transição passou e o estado final temporário foi `confirmed`/`Preparando`. Após `ROLLBACK`, continuou um pedido, Pix desativado e nenhuma instrução de teste salva.
+- Prévia do cliente foi aberta no navegador: prato entrou no carrinho, campo de observações apareceu e o item de teste foi removido sem enviar pedido. Histórico expansível ainda precisa de ensaio com conta cliente real.
+- A resposta atrasada de geocodificação agora é ignorada quando o endereço muda durante a busca. O preenchimento automático de campos por CEP invalida um pino previamente confirmado; esse comportamento ainda precisa de ensaio visual com chave HeiGIT configurada.
 
 ## Pendente para aceite operacional
 
@@ -23,4 +29,4 @@ Use contas e aparelhos de QA, sem alterar pedidos reais:
 9. Retirada no balcão não cria rota nem exige endereço.
 10. Configuração persiste; filtros, relatórios e clientes usam dados de pedidos.
 
-Esses cenários ponta a ponta ainda não passaram. Aceite de produção depende de chave HeiGIT, origem real, HTTPS, contas QA, validação de RLS e Realtime, teste de pagamentos e revisão de retenção/consentimento.
+Esses cenários ponta a ponta ainda não passaram. Os JWTs simulados verificam regras SQL, mas não substituem sessões reais ou entrega Realtime entre aparelhos. Aceite de produção depende de chave HeiGIT, origem real, HTTPS, contas QA, validação de RLS e Realtime por API, teste de pagamentos e revisão de retenção/consentimento.

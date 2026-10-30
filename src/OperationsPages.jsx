@@ -38,6 +38,10 @@ function OrderDetails({ order, restaurant, drivers }) {
   const [events,setEvents]=useState([])
   const [incidents,setIncidents]=useState([])
   const [now,setNow]=useState(Date.now())
+  const [paymentStatus,setPaymentStatus]=useState(order.payment_status)
+  const [paymentBusy,setPaymentBusy]=useState(false)
+  const [paymentError,setPaymentError]=useState('')
+  useEffect(()=>setPaymentStatus(order.payment_status),[order.payment_status])
   useEffect(()=>{
     if(!supabase||order.type!=='Entrega'||order.delivery_latitude==null)return
     let alive=true
@@ -61,34 +65,75 @@ function OrderDetails({ order, restaurant, drivers }) {
   },[order.id,order.assigned_driver,order.status])
   const fresh=location&&now-Date.parse(location.observed_at)<120000?location:null
   const resolveIncident=async id=>{const {data,error}=await supabase.rpc('lusky_resolve_incident',{p_incident_id:id});if(!error&&data===true)setIncidents(list=>list.map(item=>item.id===id?{...item,status:'resolved'}:item))}
-  return <div className="ops-details"><p><b>Pedido:</b> {order.items?.map(item=>`${item.quantity}× ${item.name}`).join(' · ')}</p><p><b>Total:</b> {money(order.total)} · <b>Pagamento:</b> {order.payment_method==='manual_pix'?'Pix manual, aguardando conferência':'Na entrega/retirada'}</p>{order.type==='Entrega'&&<><p><MapPin size={14}/> {order.address||'Endereço legado sem ponto confirmado'}</p><p><Bike size={14}/> {drivers.find(driver=>driver.id===order.assigned_driver)?.full_name||'Aguardando motoboy'}</p><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={order.delivery_latitude!=null?{latitude:order.delivery_latitude,longitude:order.delivery_longitude}:null} rider={fresh} route={route}/></Suspense><small>{route?`Rota planejada ${(route.distance_m/1000).toFixed(1)} km · ${Math.ceil(route.duration_s/60)} min estimados · calculada ${dateTime(route.calculated_at)}`:routeError||'Aguardando rota planejada.'}</small><small>{fresh?`GPS observado ${dateTime(fresh.observed_at)} · precisão ${Math.round(fresh.accuracy_m)} m`:location?`GPS desatualizado desde ${dateTime(location.observed_at)}`:'Sem GPS recebido.'}</small></>}{events.length>0&&<div className="ops-events"><b>Histórico de etapas</b>{events.map((event,index)=><div key={index}>{dateTime(event.created_at)} · {event.to_status}{event.reason&&` · ${event.reason}`}</div>)}</div>}{incidents.length>0&&<div className="ops-incidents"><b>Ocorrências</b>{incidents.map(item=><div key={item.id}>{dateTime(item.created_at)} · {item.status==='open'?'Aberta':'Resolvida'} · {item.detail} {item.status==='open'&&<button className="text-button" onClick={()=>resolveIncident(item.id)}>Marcar resolvida</button>}</div>)}</div>}</div>
+  const confirmPayment=async()=>{
+    if(paymentBusy||!supabase)return
+    setPaymentBusy(true);setPaymentError('')
+    const {data,error}=await supabase.rpc('lusky_confirm_manual_pix',{p_order_number:Number(String(order.id).replace(/\D/g,''))})
+    setPaymentBusy(false)
+    if(error||data!==true){setPaymentError(error?.message||'Não foi possível confirmar o Pix.');return}
+    setPaymentStatus('confirmed')
+  }
+  return <div className="ops-details"><p><b>Pedido:</b> {order.items?.map(item=>`${item.quantity}× ${item.name}`).join(' · ')}</p><p><b>Total:</b> {money(order.total)} · <b>Pagamento:</b> {order.payment_method==='manual_pix'?(paymentStatus==='confirmed'?'Pix manual conferido':'Pix manual aguardando conferência'):'Na entrega/retirada'}</p>{order.payment_method==='manual_pix'&&paymentStatus!=='confirmed'&&<div className="manual-pix-note"><b>Conferência manual necessária</b><p>Verifique o recebimento no canal financeiro antes de confirmar.</p><button className="button button-dark" disabled={paymentBusy} onClick={confirmPayment}>{paymentBusy?'Confirmando…':'Confirmar Pix conferido'}</button></div>}{paymentError&&<p className="checkout-error" role="alert">{paymentError}</p>}{order.type==='Entrega'&&<><p><MapPin size={14}/> {order.address||'Endereço legado sem ponto confirmado'}</p><p><Bike size={14}/> {drivers.find(driver=>driver.id===order.assigned_driver)?.full_name||'Aguardando motoboy'}</p><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={order.delivery_latitude!=null?{latitude:order.delivery_latitude,longitude:order.delivery_longitude}:null} rider={fresh} route={route}/></Suspense><small>{route?`Rota planejada ${(route.distance_m/1000).toFixed(1)} km · ${Math.ceil(route.duration_s/60)} min estimados · calculada ${dateTime(route.calculated_at)}`:routeError||'Aguardando rota planejada.'}</small><small>{fresh?`GPS observado ${dateTime(fresh.observed_at)} · precisão ${Math.round(fresh.accuracy_m)} m`:location?`GPS desatualizado desde ${dateTime(location.observed_at)}`:'Sem GPS recebido.'}</small></>}{events.length>0&&<div className="ops-events"><b>Histórico de etapas</b>{events.map((event,index)=><div key={index}>{dateTime(event.created_at)} · {event.to_status}{event.reason&&` · ${event.reason}`}</div>)}</div>}{incidents.length>0&&<div className="ops-incidents"><b>Ocorrências</b>{incidents.map(item=><div key={item.id}>{dateTime(item.created_at)} · {item.status==='open'?'Aberta':'Resolvida'} · {item.detail} {item.status==='open'&&<button className="text-button" onClick={()=>resolveIncident(item.id)}>Marcar resolvida</button>}</div>)}</div>}</div>
 }
 
-export function OrdersPage({ orders, drivers, restaurant, onStatus, onAssignDriver, onSequence, onNewOrder }) {
+export function OrdersPage({ orders, drivers, restaurant, onStatus, onAssignDriver, onSequence, onNewOrder, remote = false }) {
   const [status,setStatus]=useState('Todos')
   const [type,setType]=useState('Todos')
   const [driver,setDriver]=useState('Todos')
   const [search,setSearch]=useState('')
+  const [debouncedSearch,setDebouncedSearch]=useState('')
+  const [period,setPeriod]=useState('Todos')
+  const [olderThan45,setOlderThan45]=useState(false)
   const [page,setPage]=useState(1)
+  const [remoteRows,setRemoteRows]=useState([])
+  const [remoteCount,setRemoteCount]=useState(0)
+  const [loading,setLoading]=useState(false)
+  const [queryError,setQueryError]=useState('')
   const [selected,setSelected]=useState(null)
   const [busy,setBusy]=useState('')
   const [error,setError]=useState('')
   const [suggestion,setSuggestion]=useState(null)
   const [routeBusy,setRouteBusy]=useState(false)
-  const filtered=useMemo(()=>orders.filter(order=>(status==='Todos'||order.status===status)&&(type==='Todos'||order.type===type)&&(driver==='Todos'||(driver==='Sem motoboy'?!order.assigned_driver:order.assigned_driver===driver))&&`${order.name} ${order.id} ${order.address||''}`.toLowerCase().includes(search.toLowerCase())),[orders,status,type,driver,search])
-  useEffect(()=>setPage(1),[status,type,driver,search])
-  const pages=Math.max(1,Math.ceil(filtered.length/20))
-  const visible=filtered.slice((page-1)*20,page*20)
+  useEffect(()=>{const timer=setTimeout(()=>setDebouncedSearch(search),300);return()=>clearTimeout(timer)},[search])
+  useEffect(()=>setPage(1),[status,type,driver,search,period,olderThan45])
+  useEffect(()=>{
+    if(!remote||!supabase)return
+    let alive=true
+    setLoading(true);setQueryError('')
+    const load=async()=>{
+      let query=supabase.from('lusky_orders').select('*',{count:'exact'}).order('created_at',{ascending:false}).order('id').range((page-1)*20,page*20-1)
+      if(status!=='Todos')query=query.eq('status',status)
+      if(type!=='Todos')query=query.eq('order_type',type)
+      if(driver==='Sem motoboy')query=query.is('assigned_driver',null)
+      else if(driver!=='Todos')query=query.eq('assigned_driver',driver)
+      const days=Number(period)
+      if(Number.isFinite(days)&&days>0)query=query.gte('created_at',new Date(Date.now()-days*86400000).toISOString())
+      if(olderThan45)query=query.lt('created_at',new Date(Date.now()-45*60000).toISOString()).neq('status','Entregue').neq('status','Cancelado')
+      const term=debouncedSearch.trim().replace(/[^\p{L}\p{N} -]/gu,'').slice(0,60)
+      if(term){const number=term.match(/^(?:LF-)?(\d+)$/i);query=number?query.eq('order_number',Number(number[1])):query.or(`customer_name.ilike.%${term}%,delivery_address.ilike.%${term}%`)}
+      const {data,count,error:apiError}=await query
+      if(!alive)return
+      setLoading(false)
+      if(apiError){setRemoteRows([]);setRemoteCount(0);setQueryError('Não foi possível carregar esta página: '+apiError.message);return}
+      setRemoteCount(count||0)
+      setRemoteRows((data||[]).map(row=>({...row,db_id:row.id,id:`LF-${row.order_number}`,name:row.customer_name,type:row.order_type,items:row.items||[],total:Number(row.total),address:row.delivery_address||''})))
+    }
+    load()
+    return()=>{alive=false}
+  },[remote,orders,page,status,type,driver,period,olderThan45,debouncedSearch])
+  const filtered=useMemo(()=>orders.filter(order=>(status==='Todos'||order.status===status)&&(type==='Todos'||order.type===type)&&(driver==='Todos'||(driver==='Sem motoboy'?!order.assigned_driver:order.assigned_driver===driver))&&`${order.name} ${order.id} ${order.address||''}`.toLowerCase().includes(search.toLowerCase())&&(period==='Todos'||(order.created_at&&Date.parse(order.created_at)>=Date.now()-Number(period)*86400000))&&(!olderThan45||(!['Entregue','Cancelado'].includes(order.status)&&Date.parse(order.created_at)<Date.now()-45*60000))),[orders,status,type,driver,search,period,olderThan45])
+  const pages=Math.max(1,Math.ceil((remote?remoteCount:filtered.length)/20))
+  const visible=remote?remoteRows:filtered.slice((page-1)*20,page*20)
   const transition=async(order,next)=>{setBusy(order.id);setError('');const okay=await onStatus(order.id,next);if(!okay)setError(`Não foi possível atualizar ${order.id}.`);setBusy('')}
   const readyRoutes=drivers.map(item=>({driver:item,orders:orders.filter(order=>order.type==='Entrega'&&order.status==='Pronto'&&order.assigned_driver===item.id)})).filter(item=>item.orders.length>=2)
   const suggest=async group=>{setRouteBusy(true);setError('');setSuggestion(null);try{const result=await mapRequest(supabase,{action:'optimize',order_numbers:group.orders.map(order=>Number(String(order.id).replace(/\D/g,'')))});setSuggestion({driver_id:group.driver.id,...result})}catch(error){setError(error.message)}finally{setRouteBusy(false)}}
   const move=(index,delta)=>setSuggestion(current=>{const numbers=[...current.order_numbers];[numbers[index],numbers[index+delta]]=[numbers[index+delta],numbers[index]];return {...current,order_numbers:numbers}})
   const apply=async()=>{setRouteBusy(true);const okay=await onSequence(suggestion.driver_id,suggestion.order_numbers);setRouteBusy(false);if(okay)setSuggestion(null)}
-  return <><div className="section-heading"><div><h1>Central de pedidos</h1><p>Filtre, acompanhe e avance cada etapa confirmada.</p></div><button className="button button-dark" onClick={onNewOrder}>Novo pedido</button></div><section className="panel orders-panel"><div className="ops-filters"><label>Status<select value={status} onChange={event=>setStatus(event.target.value)}>{['Todos','Novo pedido','Preparando','Pronto','Saiu para entrega','Entregue','Cancelado'].map(value=><option key={value}>{value}</option>)}</select></label><label>Tipo<select value={type} onChange={event=>setType(event.target.value)}>{['Todos','Entrega','Retirada','Salão','Salão · Mesa 01'].map(value=><option key={value}>{value}</option>)}</select></label><label>Motoboy<select value={driver} onChange={event=>setDriver(event.target.value)}><option>Todos</option><option>Sem motoboy</option>{drivers.map(item=><option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label><label>Buscar<input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Número, cliente ou endereço"/></label></div>
-    {error&&<p className="checkout-error" role="alert">{error}</p>}{visible.length?visible.map(order=><div className="ops-order" key={order.id}><div className="ops-order-row"><button className="text-button" onClick={()=>setSelected(selected===order.id?null:order.id)}>{order.id}</button><b>{order.name}</b><span>{order.status}</span><span>{order.type}</span><span>{money(order.total)}</span><small>{dateTime(order.created_at)}</small>{nextStatus(order)&&<button className="button button-dark" disabled={busy===order.id} onClick={()=>transition(order,nextStatus(order))}>{nextStatus(order)}</button>}</div>
+  return <><div className="section-heading"><div><h1>Central de pedidos</h1><p>Filtre, acompanhe e avance cada etapa confirmada.</p></div><button className="button button-dark" onClick={onNewOrder}>Novo pedido</button></div><section className="panel orders-panel"><div className="ops-filters"><label>Status<select value={status} onChange={event=>setStatus(event.target.value)}>{['Todos','Novo pedido','Preparando','Pronto','Saiu para entrega','Entregue','Cancelado'].map(value=><option key={value}>{value}</option>)}</select></label><label>Tipo<select value={type} onChange={event=>setType(event.target.value)}>{['Todos','Entrega','Retirada','Salão','Salão · Mesa 01'].map(value=><option key={value}>{value}</option>)}</select></label><label>Motoboy<select value={driver} onChange={event=>setDriver(event.target.value)}><option>Todos</option><option>Sem motoboy</option>{drivers.map(item=><option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label><label>Período<select value={period} onChange={event=>setPeriod(event.target.value)}><option>Todos</option><option value="1">Últimas 24 horas</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option></select></label><label>Buscar<input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Número, cliente ou endereço"/></label><label className="ops-late-filter"><input type="checkbox" checked={olderThan45} onChange={event=>setOlderThan45(event.target.checked)}/>Mais de 45 min sem concluir</label></div>
+    {error&&<p className="checkout-error" role="alert">{error}</p>}{queryError&&<p className="checkout-error" role="alert">{queryError}</p>}{loading&&<p className="ops-loading" role="status">Carregando pedidos…</p>}{!loading&&(visible.length?visible.map(order=><div className="ops-order" key={order.id}><div className="ops-order-row"><button className="text-button" onClick={()=>setSelected(selected===order.id?null:order.id)}>{order.id}</button><b>{order.name}</b><span>{order.status}</span><span>{order.type}</span><span>{money(order.total)}</span><small>{dateTime(order.created_at)}</small>{nextStatus(order)&&<button className="button button-dark" disabled={busy===order.id} onClick={()=>transition(order,nextStatus(order))}>{nextStatus(order)}</button>}</div>
       {order.type==='Entrega'&&order.status==='Pronto'&&<div className="ops-assignment"><KitchenCode order={order}/><label>Motoboy <select value={order.assigned_driver||''} onChange={event=>onAssignDriver(order,event.target.value||null)}><option value="">Sem motoboy</option>{drivers.filter(item=>item.active&&item.document_valid).map(item=><option key={item.id} value={item.id}>{item.full_name} · {item.driver_code}</option>)}</select></label></div>}
-      {selected===order.id&&<OrderDetails order={order} restaurant={restaurant} drivers={drivers}/>}</div>):<div className="empty-state"><ShoppingBag size={24}/><b>Nenhum pedido com esses filtros.</b></div>}
-    <div className="table-footer"><span>{filtered.length} pedidos · página {page} de {pages}</span><div><button className="pagination-button" disabled={page===1} onClick={()=>setPage(current=>current-1)}>Anterior</button><button className="pagination-button" disabled={page===pages} onClick={()=>setPage(current=>current+1)}>Próxima</button></div></div></section>
+      {selected===order.id&&<OrderDetails order={order} restaurant={restaurant} drivers={drivers}/>}</div>):<div className="empty-state"><ShoppingBag size={24}/><b>Nenhum pedido com esses filtros.</b></div>)}
+    <div className="table-footer"><span>{remote?remoteCount:filtered.length} pedidos · página {page} de {pages}</span><div><button className="pagination-button" disabled={page===1||loading} onClick={()=>setPage(current=>current-1)}>Anterior</button><button className="pagination-button" disabled={page===pages||loading} onClick={()=>setPage(current=>current+1)}>Próxima</button></div></div></section>
     {readyRoutes.length>0&&<section className="panel route-planning"><h2>Sequência de entregas</h2><p>O provedor sugere uma ordem pelas vias disponíveis. Revise antes de salvar.</p>{readyRoutes.map(group=><div key={group.driver.id}><b>{group.driver.full_name} · {group.orders.length} pedidos prontos</b><button className="button button-secondary" disabled={routeBusy||!supabase} onClick={()=>suggest(group)}>{routeBusy?'Calculando…':'Sugerir sequência'}</button></div>)}{suggestion&&<div className="route-suggestion"><b>Sugestão · {(suggestion.distance_m/1000).toFixed(1)} km · cerca de {Math.ceil(suggestion.duration_s/60)} min</b>{suggestion.order_numbers.map((number,index)=><div key={number}><span>{index+1}. LF-{number}</span><button disabled={index===0} onClick={()=>move(index,-1)}>Subir</button><button disabled={index===suggestion.order_numbers.length-1} onClick={()=>move(index,1)}>Descer</button></div>)}<button className="button button-dark" disabled={routeBusy} onClick={apply}>Salvar sequência revisada</button></div>}</section>}
   </>
 }

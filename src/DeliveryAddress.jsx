@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { addressIsComplete, digits, distanceKm, lookupCep, mapRequest, maskCep } from './delivery'
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { addressIsComplete, addressLocationKey, digits, distanceKm, lookupCep, mapRequest, maskCep, updateAddressField } from './delivery'
 
 const PinPicker = lazy(() => import('./DeliveryMap').then(module => ({ default: module.PinPicker })))
 
@@ -7,7 +7,9 @@ export default function DeliveryAddress({ value, onChange, restaurant, client })
   const [cepState, setCepState] = useState('')
   const [mapState, setMapState] = useState('')
   const [busy, setBusy] = useState(false)
-  const update = (field, text) => onChange(current => ({ ...current, [field]: text, ...(['street','street_number','no_number','district','city','state','zip_code'].includes(field) ? { pin_confirmed: false } : {}) }))
+  const locationKeyRef = useRef(addressLocationKey(value))
+  locationKeyRef.current = addressLocationKey(value)
+  const update = (field, text) => onChange(current => updateAddressField(current, field, text))
 
   useEffect(() => {
     if (digits(value.zip_code).length !== 8) return
@@ -16,11 +18,10 @@ export default function DeliveryAddress({ value, onChange, restaurant, client })
       setCepState('Buscando CEP…')
       try {
         const result = await lookupCep(value.zip_code, controller.signal)
+        if (controller.signal.aborted) return
         onChange(current => ({ ...current,
-          street: current.street || result.street,
-          district: current.district || result.district,
-          city: current.city || result.city,
-          state: current.state || result.state,
+          ...Object.fromEntries(['street','district','city','state'].filter(field => !current[field] && result[field]).map(field => [field,result[field]])),
+          ...(['street','district','city','state'].some(field => !current[field] && result[field]) ? { latitude:null, longitude:null, pin_confirmed:false } : {}),
         }))
         setCepState('CEP consultado. Informe o número e confira os demais campos.')
       } catch (error) { if (!controller.signal.aborted) setCepState(error.message) }
@@ -32,11 +33,13 @@ export default function DeliveryAddress({ value, onChange, restaurant, client })
     const complete = digits(value.zip_code).length === 8 && value.street.trim() && (value.no_number || value.street_number.trim()) && value.city.trim() && value.state.trim()
     if (!complete) { setMapState('Preencha CEP, rua, número, cidade e UF antes de localizar.'); return }
     setBusy(true); setMapState('Localizando o endereço completo…')
+    const requestedLocationKey = addressLocationKey(value)
     try {
       const text = `${value.street}, ${value.no_number ? 's/n' : value.street_number}, ${value.district}, ${value.city}, ${value.state}, Brasil, ${digits(value.zip_code)}`
       const result = await mapRequest(client, { action: 'geocode', text })
+      if (locationKeyRef.current !== requestedLocationKey) { setMapState('O endereço mudou durante a busca. Localize novamente.'); return }
       if (!result.point) throw new Error('Endereço não encontrado. Confira os campos e tente novamente.')
-      onChange(current => ({ ...current, ...result.point, pin_confirmed: false }))
+      onChange(current => addressLocationKey(current) === requestedLocationKey ? { ...current, ...result.point, pin_confirmed: false } : current)
       setMapState('Confira o pino. Toque no mapa para ajustá-lo e depois confirme.')
     } catch (error) { setMapState(error.message) }
     finally { setBusy(false) }

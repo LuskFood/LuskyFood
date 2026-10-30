@@ -1,6 +1,6 @@
 # Documentação Lusky Food
 
-Estado em 30/10/2026. O código e as migrações estão implementados localmente; as migrações e a Edge Function foram aplicadas no projeto Supabase conectado. O build e cinco testes de utilidades passaram. A chave HeiGIT, a origem real do restaurante, testes com contas separadas em aparelhos reais, hospedagem HTTPS e publicação GitHub ainda dependem de configuração/acesso. Portanto o rastreamento com provedor real ainda não foi validado.
+Estado em 30/10/2026. O código e as migrações estão implementados localmente; as migrações e a Edge Function foram aplicadas no projeto Supabase conectado. O build e cinco testes de utilidades passaram; o bundle principal ficou abaixo de 500 kB após separar Supabase. A chave HeiGIT, a origem real do restaurante, testes com contas separadas em aparelhos reais, hospedagem HTTPS e publicação GitHub ainda dependem de configuração/acesso. Portanto o rastreamento com provedor real ainda não foi validado.
 
 ## Índice
 

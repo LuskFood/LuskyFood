@@ -5,6 +5,18 @@ export const maskCpf = value => digits(value).slice(0, 11).replace(/^(\d{3})(\d)
 
 export const emptyAddress = { label: 'Casa', zip_code: '', street: '', street_number: '', no_number: false, complement: '', district: '', city: '', state: '', reference: '', instructions: '', latitude: null, longitude: null, pin_confirmed: false }
 
+const locationFields = new Set(['street', 'street_number', 'no_number', 'district', 'city', 'state', 'zip_code'])
+
+export const addressLocationKey = address => JSON.stringify([...locationFields].map(field => address?.[field] ?? null))
+
+export function updateAddressField(address, field, value) {
+  if (address[field] === value) return address
+  const next = { ...address, [field]: value }
+  return locationFields.has(field)
+    ? { ...next, latitude: null, longitude: null, pin_confirmed: false }
+    : next
+}
+
 export function addressIsComplete(address) {
   return Boolean(digits(address.zip_code).length === 8 && address.street.trim().length >= 2 &&
     (address.no_number || address.street_number.trim()) && address.district.trim() &&

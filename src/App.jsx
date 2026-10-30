@@ -498,6 +498,7 @@ export default function App() {
   const [authChecked,setAuthChecked]=useState(!supabase)
   const [recovery,setRecovery]=useState(false)
   const [demoLoaded,setDemoLoaded]=useState(false)
+  const [syncError,setSyncError]=useState('')
   const notify=message=>setToast(message)
   useEffect(()=>{
     if(!supabase)return
@@ -509,12 +510,13 @@ export default function App() {
   useEffect(()=>{if(!supabase||(session?.localDemo&&demoLoaded))localStorage.setItem(productKey,JSON.stringify(products))},[products,session?.localDemo,demoLoaded])
   useEffect(()=>{
     if (!supabase||!session) { setDrivers([]);setDemoLoaded(false); return }
-    if(session.localDemo){setOrders(readOrders());setProducts(readProducts());setDrivers([]);setDemoLoaded(true);return}
+    if(session.localDemo){setOrders(readOrders());setProducts(readProducts());setDrivers([]);setSyncError('');setDemoLoaded(true);return}
     setDemoLoaded(false)
     let alive=true
     const load=async()=>{
       const [p,o,d,s]=await Promise.all([supabase.from('lusky_products').select('*').order('created_at'),fetchAllOrders(),supabase.from('lusky_motoboy_profiles').select('*').order('created_at',{ascending:false}),supabase.from('lusky_restaurant_settings').select('*').eq('id',1).maybeSingle()])
       if(!alive)return
+      setSyncError([p.error,o.error,d.error,s.error].some(Boolean)?'Não foi possível atualizar todos os dados do banco. Verifique a conexão e recarregue a página.':'')
       if(!p.error&&p.data.length)setProducts(p.data.map(x=>({id:x.id,name:x.name,category:x.category,price:Number(x.price),description:x.description||'',emoji:x.emoji||'',icon:x.icon||'fork',image_url:x.image_url||'',color:x.color||'sage',available:x.available,sold:x.sold||0})))
       if(!o.error)setOrders(o.data.map(x=>({...x,db_id:x.id,id:`LF-${x.order_number}`,name:x.customer_name,initials:x.customer_name.split(' ').map(y=>y[0]).slice(0,2).join('').toUpperCase(),type:x.order_type,items:x.items||[],total:Number(x.total),time:new Date(x.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),ago:'',color:'green',address:x.delivery_address||'',pickup_code:'',delivery_code:''})))
       if(!s.error)setRestaurant(s.data)
@@ -525,8 +527,9 @@ export default function App() {
         if(alive)setDrivers(withDocuments)
       }
     }
-    load()
-    const channel=supabase.channel('lusky-live').on('postgres_changes',{event:'*',schema:'public',table:'lusky_orders'},load).subscribe(status=>{if(status==='SUBSCRIBED')load()})
+    const safeLoad=()=>load().catch(()=>{if(alive)setSyncError('Não foi possível alcançar o banco. Verifique a conexão e recarregue a página.')})
+    safeLoad()
+    const channel=supabase.channel('lusky-live').on('postgres_changes',{event:'*',schema:'public',table:'lusky_orders'},safeLoad).subscribe(status=>{if(status==='SUBSCRIBED')safeLoad()})
     return()=>{alive=false;supabase.removeChannel(channel)}
   },[session?.user?.id,session?.localDemo])
   const saveOrder=async order=>{
@@ -586,10 +589,10 @@ export default function App() {
   const canManageUsers=role==='owner'&&!session?.localDemo&&!!supabase
   const openOrder=canManage?()=>setOrderModal(true):null
   const changeStatus=canManage?updateStatus:null
-  if(role==='customer')return <CustomerPortalV2 products={products} orders={orders} drivers={drivers} restaurant={restaurant} session={session} onPlaceOrder={saveOrder} onSignOut={()=>previewRole?setPreviewRole(null):session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
-  if(role==='motoboy')return <RiderPortalV2 orders={orders} restaurant={restaurant} driverProfile={drivers.find(driver=>driver.id===session?.user?.id)} onStatus={updateStatus} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
-  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>:page==='Relatórios'?<OpsReportsPage orders={orders}/>:<RestaurantSettings restaurant={restaurant} onSaved={setRestaurant}/>
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} canManageUsers={canManageUsers}/><main className="main-area"><Header page={page} setPage={setPage} setMobileOpen={setMobileOpen} onNewOrder={()=>setOrderModal(true)} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/><div className="content-area">{session?.localDemo&&<div className="demo-data-note"><CircleHelp size={15}/><span><b>Modo demonstração</b> · pedidos e indicadores exibidos são exemplos locais.</span></div>}{content}<footer className="app-footer"><Brand/><span>Feito com sabor e cuidado <span>♥</span> · © 2026 Lusky Food</span></footer></div></main>{orderModal&&<AdminOrderModal products={products} restaurant={restaurant} onClose={()=>setOrderModal(false)} onSave={saveOrder}/ >}{productModal!==null&&<ProductEditor product={productModal.id?productModal:null} onClose={()=>setProductModal(null)} onSave={saveProduct}/>}<Toast message={toast} close={()=>setToast('')}/></div>
+  if(role==='customer')return <CustomerPortalV2 products={products} orders={orders} drivers={drivers} restaurant={restaurant} session={session} syncError={syncError} onPlaceOrder={saveOrder} onSignOut={()=>previewRole?setPreviewRole(null):session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
+  if(role==='motoboy')return <RiderPortalV2 orders={orders} restaurant={restaurant} syncError={syncError} driverProfile={drivers.find(driver=>driver.id===session?.user?.id)} onStatus={updateStatus} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
+  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>:page==='Relatórios'?<OpsReportsPage orders={orders}/>:<RestaurantSettings restaurant={restaurant} onSaved={setRestaurant}/>
+  return <div className="app-shell"><Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} canManageUsers={canManageUsers}/><main className="main-area"><Header page={page} setPage={setPage} setMobileOpen={setMobileOpen} onNewOrder={()=>setOrderModal(true)} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/><div className="content-area">{session?.localDemo&&<div className="demo-data-note"><CircleHelp size={15}/><span><b>Modo demonstração</b> · pedidos e indicadores exibidos são exemplos locais.</span></div>}{syncError&&<p className="checkout-error" role="alert">{syncError}</p>}{content}<footer className="app-footer"><Brand/><span>Feito com sabor e cuidado <span>♥</span> · © 2026 Lusky Food</span></footer></div></main>{orderModal&&<AdminOrderModal products={products} restaurant={restaurant} onClose={()=>setOrderModal(false)} onSave={saveOrder}/ >}{productModal!==null&&<ProductEditor product={productModal.id?productModal:null} onClose={()=>setProductModal(null)} onSave={saveProduct}/>}<Toast message={toast} close={()=>setToast('')}/></div>
 }
 
 

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { addressIsComplete, distanceKm, digits, lookupCep, mapRequest, maskCep, maskCpf, maskPhone } from '../src/delivery.js'
+import { addressIsComplete, addressLocationKey, distanceKm, digits, lookupCep, mapRequest, maskCep, maskCpf, maskPhone, updateAddressField } from '../src/delivery.js'
 
 test('masks accept digits and pasted punctuation without losing numbers', () => {
   assert.equal(maskCep('01.001-000'), '01001-000')
@@ -16,6 +16,20 @@ test('delivery address requires full fields and a confirmed pin', () => {
   assert.equal(addressIsComplete({ ...address, street_number:'', no_number:true }), true)
   assert.equal(addressIsComplete({ ...address, latitude:null }), false)
   assert.equal(addressIsComplete({ ...address, pin_confirmed:false }), false)
+})
+
+test('editing an address location invalidates its confirmed pin', () => {
+  const address = { zip_code:'01001000', street:'Praça da Sé', street_number:'1', no_number:false, district:'Sé', city:'São Paulo', state:'SP', latitude:-23.55, longitude:-46.63, pin_confirmed:true, complement:'Apto 2' }
+  for (const field of ['zip_code', 'street', 'street_number', 'no_number', 'district', 'city', 'state']) {
+    const changed = updateAddressField(address, field, field === 'no_number' ? true : 'outro')
+    assert.equal(changed.latitude, null, field)
+    assert.equal(changed.longitude, null, field)
+    assert.equal(changed.pin_confirmed, false, field)
+  }
+  assert.equal(updateAddressField(address, 'complement', 'Apto 3').pin_confirmed, true)
+  assert.equal(updateAddressField(address, 'street', address.street), address)
+  assert.notEqual(addressLocationKey(address), addressLocationKey(updateAddressField(address, 'street', 'Outra rua')))
+  assert.equal(addressLocationKey(address), addressLocationKey(updateAddressField(address, 'complement', 'Apto 3')))
 })
 
 test('coverage is approximate and rejects missing coordinates', () => {
