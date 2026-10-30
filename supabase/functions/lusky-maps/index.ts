@@ -6,11 +6,26 @@ const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const cache = new Map<string, { expires: number; value: unknown }>();
 const hits = new Map<string, { until: number; count: number }>();
+let publicRouteQueue: Promise<void> = Promise.resolve();
+let nextPublicRouteAt = 0;
 const validPoint = (point: unknown): point is Point => Array.isArray(point) && point.length === 2 &&
   point.every(Number.isFinite) && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90;
 const validGeometry = (geometry: { type?: string; coordinates?: unknown[] } | null | undefined) =>
   geometry?.type === "LineString" && Array.isArray(geometry.coordinates) && geometry.coordinates.length >= 2 && geometry.coordinates.every(validPoint);
 const near = (a: Point, b: Point) => Math.abs(a[0] - b[0]) < 0.003 && Math.abs(a[1] - b[1]) < 0.003;
+
+function requestPublicOsrmRoute(coordinates: Point[], signal: AbortSignal) {
+  const request = publicRouteQueue.then(async () => {
+    const wait = Math.max(0, nextPublicRouteAt - Date.now());
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    nextPublicRouteAt = Date.now() + 1_000;
+    const points = coordinates.map(([longitude, latitude]) => `${longitude},${latitude}`).join(";");
+    const url = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${points}?overview=full&geometries=geojson&steps=false`;
+    return fetch(url, { headers: { Accept: "application/json", "User-Agent": "LuskyFood/1.0 (https://github.com/LuskFood/LuskyFood)" }, signal });
+  });
+  publicRouteQueue = request.then(() => undefined, () => undefined);
+  return request;
+}
 
 Deno.serve(async request => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -32,9 +47,10 @@ Deno.serve(async request => {
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return json({ error: "Dados inválidos." }, 400); }
   const action = String(body.action || "");
-  let target: string;
-  let options: RequestInit;
+  let target = "";
+  let options: RequestInit = {};
   let cacheKey: string;
+  let publicRouteCoordinates: Point[] | null = null;
   let orderId: string | null = null;
   let optimizationNumbers: number[] | null = null;
   if (action === "geocode") {
@@ -61,10 +77,12 @@ Deno.serve(async request => {
       orderId = order.id;
       const { data: existing } = await admin.from("lusky_order_routes").select("geometry,distance_m,duration_s,calculated_at,profile").eq("order_id", order.id).maybeSingle();
       const points = existing?.geometry?.coordinates;
-      if (existing?.profile === "driving-car-shortest" && validGeometry(existing.geometry) && near(points[0], start) && near(points[points.length-1], end) && Number.isFinite(existing.distance_m) && Number.isFinite(existing.duration_s)) return json(existing);
+      if (["driving-car-shortest", "osrm-car-fastest"].includes(existing?.profile) && validGeometry(existing.geometry) && near(points[0], start) && near(points[points.length-1], end) && Number.isFinite(existing.distance_m) && Number.isFinite(existing.duration_s)) return json(existing);
     }
-    target = "https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson";
-    options = { method: "POST", headers: { Authorization: key || "", "Content-Type": "application/json" }, body: JSON.stringify({ coordinates: [start, end], preference: "shortest", instructions: false }) };
+    if (key) {
+      target = "https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson";
+      options = { method: "POST", headers: { Authorization: key, "Content-Type": "application/json" }, body: JSON.stringify({ coordinates: [start, end], preference: "shortest", instructions: false }) };
+    } else publicRouteCoordinates = [start, end];
     cacheKey = `route:${order.id}:${pickup ? 'pickup' : 'delivery'}:${start.map(n=>n.toFixed(4)).join(',')}:${end.map(n=>n.toFixed(4)).join(',')}`;
   } else if (action === "sequence") {
     const numbers = body.order_numbers;
@@ -80,8 +98,10 @@ Deno.serve(async request => {
     const start: Point = Array.isArray(body.origin) ? body.origin as Point : [Number(restaurant.longitude),Number(restaurant.latitude)];
     const coordinates: Point[] = [start, ...ordered.map(stop => [Number(stop.delivery_longitude),Number(stop.delivery_latitude)] as Point)];
     if (!coordinates.every(validPoint)) return json({ error: "A sequência contém coordenadas inválidas." }, 400);
-    target = "https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson";
-    options = { method:"POST", headers:{ Authorization:key || "", "Content-Type":"application/json" }, body:JSON.stringify({ coordinates, preference:"shortest", instructions:false }) };
+    if (key) {
+      target = "https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson";
+      options = { method:"POST", headers:{ Authorization:key, "Content-Type":"application/json" }, body:JSON.stringify({ coordinates, preference:"shortest", instructions:false }) };
+    } else publicRouteCoordinates = coordinates;
     cacheKey = `sequence:${user.id}:${numbers.join(',')}:${coordinates.map(point=>point.map(n=>n.toFixed(4)).join(',')).join(';')}`;
   } else if (action === "optimize") {
     if (!["owner","manager","staff"].includes(String(user.app_metadata?.role || ""))) return json({ error: "Somente a equipe pode sugerir sequência." }, 403);
@@ -101,11 +121,13 @@ Deno.serve(async request => {
 
   const cached = cache.get(cacheKey);
   if (cached && cached.expires > now) return json(cached.value);
-  if (!key) return json({ error: "Roteamento indisponível: o provedor de mapas ainda não está configurado." }, 503);
+  if (!key && !publicRouteCoordinates) return json({ error: "Geocodificação e otimização avançada precisam de HEIGIT_API_KEY. Configure a chave na Edge Function lusky-maps." }, 503);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(target, { ...options, signal: controller.signal });
+    const response = publicRouteCoordinates
+      ? await requestPublicOsrmRoute(publicRouteCoordinates, controller.signal)
+      : await fetch(target, { ...options, signal: controller.signal });
     if (response.status === 403 || response.status === 429) return json({ error: "A cota do mapa foi atingida. Tente mais tarde." }, 503);
     if (!response.ok) return json({ error: "Não foi possível calcular o mapa agora." }, 502);
     const result = await response.json();
@@ -116,9 +138,13 @@ Deno.serve(async request => {
       if (!validPoint(coords)) return json({ error: "Endereço não encontrado. Ajuste os campos ou o pino." }, 404);
       value = { point: { latitude: coords[1], longitude: coords[0] }, label: feature.properties?.label || "" };
     } else if (action === "route" || action === "sequence") {
-      const feature = result.features?.[0];
-      if (!validGeometry(feature?.geometry) || !Number.isFinite(feature?.properties?.summary?.distance) || !Number.isFinite(feature?.properties?.summary?.duration)) return json({ error: "Rota indisponível para esses pontos." }, 404);
-      value = { geometry: feature.geometry, distance_m: feature.properties.summary.distance, duration_s: feature.properties.summary.duration, calculated_at: new Date().toISOString(), profile: action === "sequence" ? "driving-car-shortest-sequence" : "driving-car-shortest" };
+      const feature = publicRouteCoordinates ? result.routes?.[0] : result.features?.[0];
+      const geometry = feature?.geometry;
+      const distance = publicRouteCoordinates ? feature?.distance : feature?.properties?.summary?.distance;
+      const duration = publicRouteCoordinates ? feature?.duration : feature?.properties?.summary?.duration;
+      if (result.code && result.code !== "Ok") return json({ error: "O serviço de rotas não encontrou um caminho para esses pontos." }, 404);
+      if (!validGeometry(geometry) || !Number.isFinite(distance) || !Number.isFinite(duration)) return json({ error: "Rota indisponível para esses pontos." }, 404);
+      value = { geometry, distance_m: distance, duration_s: duration, calculated_at: new Date().toISOString(), profile: publicRouteCoordinates ? (action === "sequence" ? "osrm-car-fastest-sequence" : "osrm-car-fastest") : (action === "sequence" ? "driving-car-shortest-sequence" : "driving-car-shortest") };
       if (orderId) {
         const { error: saveError } = await admin.from("lusky_order_routes").upsert({ order_id: orderId, ...value });
         if (saveError) return json({ error: "A rota foi calculada, mas não pôde ser salva." }, 500);
@@ -135,3 +161,4 @@ Deno.serve(async request => {
     return json({ error: "O serviço de mapa demorou a responder. Tente novamente." }, 504);
   } finally { clearTimeout(timeout); }
 });
+
