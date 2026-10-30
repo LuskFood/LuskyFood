@@ -8,8 +8,8 @@ export const demoRestaurant = {
 }
 
 export const demoDrivers = [
-  { id: 'demo-motoboy', full_name: 'Rafael Almeida', driver_code: 'MB-001', active: true, document_valid: true, vehicle_brand: 'Honda', vehicle_model: 'CG 160', vehicle_color: 'Preta', vehicle_plate: 'ABC1D23' },
-  { id: 'demo-motoboy-2', full_name: 'Bruna Santos', driver_code: 'MB-002', active: true, document_valid: true, vehicle_brand: 'Yamaha', vehicle_model: 'Factor 150', vehicle_color: 'Vermelha', vehicle_plate: 'DEF4G56' },
+  { id: 'demo-motoboy', full_name: 'Rafael Almeida', phone: '11900000003', driver_code: 'MB-001', active: true, document_valid: true, vehicle_brand: 'Honda', vehicle_model: 'CG 160', vehicle_color: 'Preta', vehicle_plate: 'ABC1D23' },
+  { id: 'demo-motoboy-2', full_name: 'Bruna Santos', phone: '11900000004', driver_code: 'MB-002', active: true, document_valid: true, vehicle_brand: 'Yamaha', vehicle_model: 'Factor 150', vehicle_color: 'Vermelha', vehicle_plate: 'DEF4G56' },
 ]
 
 const point = [
@@ -29,7 +29,7 @@ export function enrichDemoOrders(orders) {
     customer_phone: order.customer_phone || `1190000000${index}`,
     delivery_latitude: order.delivery_latitude ?? point[index + 1]?.[0] ?? null,
     delivery_longitude: order.delivery_longitude ?? point[index + 1]?.[1] ?? null,
-    assigned_driver: order.assigned_driver || (order.type === 'Entrega' && index < 4 ? (index === 2 ? demoDrivers[1] : demoDrivers[0]).id : null),
+    assigned_driver: order.assigned_driver || (order.type === 'Entrega' && ['Pronto', 'Saiu para entrega', 'Entregue'].includes(order.status) ? (index === 2 ? demoDrivers[1] : demoDrivers[0]).id : null),
     localCustomer: order.localCustomer || (index === 3 ? 'customer@luskyfood.local' : null),
     demo_position: index === 3 ? { latitude: -23.6581, longitude: -46.7751, observed_at: new Date(now).toISOString(), accuracy_m: 25 } : null,
   }))
