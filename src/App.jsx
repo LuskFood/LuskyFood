@@ -20,6 +20,7 @@ import AccountSettings from './AccountSettings'
 import { OverviewPage, OrdersPage as OpsOrdersPage, CustomersPage as OpsCustomersPage, ReportsPage as OpsReportsPage } from './OperationsPages'
 import { digits, maskCpf, maskPhone } from './delivery'
 import { validVehiclePlate } from './account'
+import { demoDrivers, demoRestaurant, enrichDemoOrders } from './demoData'
 
 const initialProducts = [
   { id: 'p-frango', name: 'Frango Xadrez', category: 'Pratos principais', price: 50, description: 'Frango suculento, legumes crocantes e molho especial, acompanhado de arroz.', icon: 'flame', image_url: '/images/frango-xadrez.jpg', color: 'peach', available: true, sold: 32 },
@@ -40,17 +41,18 @@ const readProducts = () => {
 const readOrders = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(orderKey) || '[]')
-    if (!Array.isArray(stored) || stored.some(order => order.items?.some(item => legacyProductNames.includes(item.name)))) return initialOrders
-    return stored
-  } catch { return initialOrders }
+    if (!Array.isArray(stored) || stored.some(order => order.items?.some(item => legacyProductNames.includes(item.name)))) return enrichDemoOrders(initialOrders)
+    const samples = enrichDemoOrders(initialOrders)
+    return [...stored.map(order => { const sample=samples.find(item=>item.id===order.id); return sample?{...sample,...order,created_at:sample.created_at,delivery_latitude:sample.delivery_latitude,delivery_longitude:sample.delivery_longitude,assigned_driver:sample.assigned_driver,localCustomer:sample.localCustomer,demo_position:sample.demo_position,address:sample.address}:order }), ...samples.filter(sample => !stored.some(order => order.id === sample.id))]
+  } catch { return enrichDemoOrders(initialOrders) }
 }
 
 const initialOrders = [
   { id: 'LF-2841', name: 'Marina Costa', initials: 'MC', type: 'Retirada', items: [{ name: 'Frango Xadrez', quantity: 2 }], total: 100, status: 'Preparando', time: '12:42', ago: 'há 8 min', color: 'rose', address: 'Retirada no balcão', pickup_code: '4182', delivery_code: '—' },
-  { id: 'LF-2840', name: 'Pedro Henrique', initials: 'PH', type: 'Entrega', items: [{ name: 'Sobá', quantity: 1 }], total: 45, status: 'Novo pedido', time: '12:38', ago: 'há 12 min', color: 'blue', address: 'Av. Afonso Pena, 1450 · Centro', pickup_code: '6204', delivery_code: '7318' },
-  { id: 'LF-2839', name: 'Camila Oliveira', initials: 'CO', type: 'Entrega', items: [{ name: 'Kibe Cru', quantity: 1 }], total: 50, status: 'Pronto', time: '12:31', ago: 'há 19 min', color: 'gold', address: 'Rua da Paz, 82 · Jardim dos Estados', pickup_code: '2851', delivery_code: '4926' },
-  { id: 'LF-2838', name: 'Lucas Martins', initials: 'LM', type: 'Entrega', items: [{ name: 'Yakisoba', quantity: 1 }], total: 50, status: 'Saiu para entrega', time: '12:25', ago: 'há 25 min', color: 'green', address: 'Rua 14 de Julho, 590 · Centro', pickup_code: '3075', delivery_code: '8541' },
-  { id: 'LF-2837', name: 'Ana Beatriz', initials: 'AB', type: 'Entrega', items: [{ name: 'Frango Xadrez', quantity: 1 }], total: 50, status: 'Entregue', time: '12:14', ago: 'há 36 min', color: 'purple', address: 'Rua Pernambuco, 210 · Monte Castelo', pickup_code: '1659', delivery_code: '3852' },
+  { id: 'LF-2840', name: 'Pedro Henrique', initials: 'PH', type: 'Entrega', items: [{ name: 'Sobá', quantity: 1 }], total: 53, status: 'Novo pedido', time: '12:38', ago: 'há 12 min', color: 'blue', address: 'Destino de exemplo · Capão Redondo', pickup_code: '6204', delivery_code: '7318' },
+  { id: 'LF-2839', name: 'Camila Oliveira', initials: 'CO', type: 'Entrega', items: [{ name: 'Kibe Cru', quantity: 1 }], total: 58, status: 'Pronto', time: '12:31', ago: 'há 19 min', color: 'gold', address: 'Destino de exemplo · Jardim Ipê', pickup_code: '2851', delivery_code: '4926' },
+  { id: 'LF-2838', name: 'Lucas Martins', initials: 'LM', type: 'Entrega', items: [{ name: 'Yakisoba', quantity: 1 }], total: 58, status: 'Saiu para entrega', time: '12:25', ago: 'há 25 min', color: 'green', address: 'Destino de exemplo · Vila das Belezas', pickup_code: '3075', delivery_code: '8541' },
+  { id: 'LF-2837', name: 'Ana Beatriz', initials: 'AB', type: 'Entrega', items: [{ name: 'Frango Xadrez', quantity: 1 }], total: 58, status: 'Entregue', time: '12:14', ago: 'há 36 min', color: 'purple', address: 'Destino de exemplo · Parque Santo Antônio', pickup_code: '1659', delivery_code: '3852' },
 ]
 
 const money = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -60,6 +62,8 @@ const validRgFormat = value => /^[0-9A-Za-z.\-/ ]{5,18}$/.test(String(value||'')
 function DishMark({ product, size = 22 }) { const Icon = dishIcon(product?.icon); return product?.image_url ? <img src={product.image_url} alt="" /> : product?.emoji ? <span>{product.emoji}</span> : <Icon size={size} strokeWidth={1.8} /> }
 const orderKey = 'lusky-orders-v1'
 const productKey = 'lusky-products-v1'
+const demoRestaurantKey = 'lusky-demo-restaurant-v1'
+const readDemoRestaurant = () => { try { return JSON.parse(localStorage.getItem(demoRestaurantKey)) || demoRestaurant } catch { return demoRestaurant } }
 const readState = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) || fallback } catch { return fallback } }
 const fetchAllOrders = async () => {
   const rows = []
@@ -217,6 +221,16 @@ function MotoboysPage({ drivers }) {
 
 const roleLabel = role => ({ customer: 'Cliente', motoboy: 'Motoboy', owner: 'Administrador', manager: 'Gerente', staff: 'Equipe' })[role] || 'Cliente'
 const userInitials = name => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
+
+function DemoUsersPage() {
+  const people = [
+    ['Lusky Food', 'Administrador', 'owner@luskyfood.local'],
+    ['Marina Costa', 'Cliente', 'marina@exemplo.local'],
+    ['Rafael Almeida', 'Motoboy', 'rafael@exemplo.local'],
+    ['Bruna Santos', 'Motoboy', 'bruna@exemplo.local'],
+  ]
+  return <><SectionHeading eyebrow="EQUIPE E ACESSO" title="Gerenciar usuários" subtitle="Visualização de exemplo para conhecer a área administrativa."/><div className="demo-data-note"><CircleHelp size={16}/><span>Contas de demonstração. Entre com a conta real de administrador para criar, editar ou desativar usuários.</span></div><section className="panel demo-users-panel"><div className="panel-heading"><h2>Contas de exemplo</h2><span>{people.length} usuários</span></div>{people.map(([name,role,email])=><div className="demo-user-row" key={email}><span className="customer-avatar">{userInitials(name)}</span><div><b>{name}</b><small>{email}</small></div><span>{role}</span></div>)}</section></>
+}
 
 function AdminUsersPage({ client, currentUser, notify }) {
   const [users, setUsers] = useState([])
@@ -513,7 +527,7 @@ export default function App() {
   useEffect(()=>{if(!supabase||(session?.localDemo&&demoLoaded))localStorage.setItem(productKey,JSON.stringify(products))},[products,session?.localDemo,demoLoaded])
   useEffect(()=>{
     if (!supabase||!session) { setDrivers([]);setDemoLoaded(false); return }
-    if(session.localDemo){setOrders(readOrders());setProducts(readProducts());setDrivers([]);setSyncError('');setDemoLoaded(true);return}
+    if(session.localDemo){setOrders(readOrders());setProducts(readProducts());setDrivers(demoDrivers);setRestaurant(readDemoRestaurant());setSyncError('');setDemoLoaded(true);return}
     setDemoLoaded(false)
     let alive=true
     const load=async()=>{
@@ -589,12 +603,12 @@ export default function App() {
   if(supabase&&!session)return <SignIn onSignedIn={setSession}/>
   const role=previewRole||session?.user?.app_metadata?.role||session?.user?.user_metadata?.account_type||'owner'
   const canManage=!supabase||session?.localDemo||['owner','manager','staff'].includes(role)
-  const canManageUsers=role==='owner'&&!session?.localDemo&&!!supabase
+  const canManageUsers=role==='owner'
   const openOrder=canManage?()=>setOrderModal(true):null
   const changeStatus=canManage?updateStatus:null
   if(role==='customer')return <CustomerPortalV2 products={products} orders={orders} drivers={drivers} restaurant={restaurant} session={session} syncError={syncError} preview={!!previewRole} onPlaceOrder={saveOrder} onSignOut={()=>previewRole?setPreviewRole(null):session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
   if(role==='motoboy')return <RiderPortalV2 orders={orders} restaurant={restaurant} syncError={syncError} user={session?.user} demo={!!session?.localDemo} driverProfile={drivers.find(driver=>driver.id===session?.user?.id)} onDriverSaved={driver=>setDrivers(list=>list.map(item=>item.id===driver.id?{...item,...driver}:item))} onStatus={updateStatus} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>
-  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>:page==='Relatórios'?<OpsReportsPage orders={orders}/>:page==='Minha conta'?<AccountSettings user={session?.user} role={role} demo={!!session?.localDemo} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>:<RestaurantSettings restaurant={restaurant} onSaved={setRestaurant}/>
+  const content=page==='Visão geral'?<OverviewPage orders={orders} products={products} setPage={setPage} onNewOrder={openOrder}/>:page==='Pedidos'?<OpsOrdersPage orders={orders} drivers={drivers} restaurant={restaurant} onStatus={changeStatus} onAssignDriver={assignDriver} onSequence={saveRouteSequence} onNewOrder={openOrder} remote={!!supabase&&!session?.localDemo}/>:page==='Cardápio'?<MenuPage products={products} onChange={saveProduct} canEdit={canManage} onAdd={canManage?product=>setProductModal(product||{}):null} onPreview={()=>setPreviewRole('customer')}/>:page==='Clientes'?<OpsCustomersPage orders={orders}/>:page==='Motoboys'?<MotoboysPage drivers={drivers}/>:page==='Usuários'&&canManageUsers?(session?.localDemo?<DemoUsersPage/>:<AdminUsersPage client={supabase} currentUser={session.user} notify={notify}/>):page==='Relatórios'?<OpsReportsPage orders={orders}/>:page==='Minha conta'?<AccountSettings user={session?.user} role={role} demo={!!session?.localDemo} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/>:<RestaurantSettings restaurant={restaurant} onSaved={value=>{setRestaurant(value);if(session?.localDemo)localStorage.setItem(demoRestaurantKey,JSON.stringify(value))}} demo={!!session?.localDemo}/>
   return <div className="app-shell"><Sidebar page={page} setPage={setPage} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} canManageUsers={canManageUsers}/><main className="main-area"><Header page={page} setPage={setPage} setMobileOpen={setMobileOpen} onNewOrder={()=>setOrderModal(true)} onSignOut={()=>session?.localDemo?setSession(null):supabase?.auth.signOut()}/><div className="content-area">{session?.localDemo&&<div className="demo-data-note"><CircleHelp size={15}/><span><b>Modo demonstração</b> · pedidos e indicadores exibidos são exemplos locais.</span></div>}{syncError&&<p className="checkout-error" role="alert">{syncError}</p>}{content}<footer className="app-footer"><Brand/><span>Feito com sabor e cuidado <span>♥</span> · © 2026 Lusky Food</span></footer></div></main>{orderModal&&<AdminOrderModal products={products} restaurant={restaurant} onClose={()=>setOrderModal(false)} onSave={saveOrder}/ >}{productModal!==null&&<ProductEditor product={productModal.id?productModal:null} onClose={()=>setProductModal(null)} onSave={saveProduct}/>}<Toast message={toast} close={()=>setToast('')}/></div>
 }
 

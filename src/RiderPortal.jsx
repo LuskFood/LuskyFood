@@ -8,7 +8,7 @@ const DeliveryMap = lazy(() => import('./DeliveryMap'))
 const formatTime = value => value ? new Date(value).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short', timeZone:'America/Sao_Paulo' }) : '—'
 
 export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile, restaurant, syncError, user, demo, onDriverSaved }) {
-  const deliveries = orders.filter(order => order.type === 'Entrega' && ['Pronto','Saiu para entrega'].includes(order.status)).sort((a,b) => (a.route_order || 999) - (b.route_order || 999))
+  const deliveries = orders.filter(order => order.type === 'Entrega' && ['Pronto','Saiu para entrega'].includes(order.status) && (!demo || order.assigned_driver === user?.id)).sort((a,b) => (a.route_order || 999) - (b.route_order || 999))
   const next = deliveries.find(order => order.status === 'Saiu para entrega') || deliveries[0]
   const active = deliveries.some(order => order.status === 'Saiu para entrega')
   const [codes, setCodes] = useState({})
@@ -26,6 +26,7 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
 
   useEffect(() => {
     if (!active) { setSharing(false); setPosition(null); setGpsState('Nenhuma entrega em rota.'); }
+    else setGpsState('GPS ainda não iniciado.')
   }, [active])
   useEffect(() => {
     if (!sharing || !active) return
@@ -35,7 +36,7 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
       const point = { latitude: result.coords.latitude, longitude: result.coords.longitude, accuracy_m: result.coords.accuracy, observed_at: new Date(result.timestamp).toISOString() }
       setPosition(point)
       setGpsState(`Última posição observada ${formatTime(point.observed_at)} · precisão ${Math.round(point.accuracy_m)} m`)
-      if (Date.now() - lastSent < 15000 || !supabase) return
+      if (Date.now() - lastSent < 15000 || !supabase || demo) return
       lastSent = Date.now()
       const { data, error } = await supabase.rpc('lusky_report_location', { p_latitude: point.latitude, p_longitude: point.longitude, p_accuracy_m: point.accuracy_m, p_observed_at: point.observed_at })
       if (error || data !== true) setGpsState('A posição não chegou ao servidor. Verifique sua conexão e a entrega ativa.')
@@ -46,7 +47,7 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
     return () => navigator.geolocation.clearWatch(watcher)
   }, [sharing, active])
   useEffect(() => {
-    if (!next || !supabase || next.delivery_latitude == null) { setRoute(null); return }
+    if (!next || demo || !supabase || next.delivery_latitude == null) { setRoute(null); return }
     let alive = true
     setRouteError('')
     mapRequest(supabase, { action: 'route', order_number: Number(String(next.id).replace(/\D/g,'')) }).then(value => { if (alive) setRoute(value) }).catch(error => { if (alive) setRouteError(error.message) })
@@ -57,6 +58,7 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
     if (busy) return
     const code = String(codes[order.id] || '').replace(/\D/g,'')
     if (code.length < 4) { setMessage('Digite o código informado pela cozinha ou pelo cliente.'); return }
+    if (demo && code !== String(status === 'Entregue' ? order.delivery_code : order.pickup_code)) { setMessage('Código de demonstração incorreto. Confira com a pessoa responsável.'); return }
     setBusy(true)
     const okay = await onStatus(order.id, status, code)
     setBusy(false)
@@ -64,6 +66,7 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
     if (okay) setCodes(current => ({ ...current, [order.id]: '' }))
   }
   const toggleAvailability = async () => {
+    if (demo) { setAvailable(value=>!value); setMessage(available?'Você está offline nesta demonstração.':'Você está disponível nesta demonstração.'); return }
     if (!supabase) { setGpsState('Disponibilidade exige conexão com o Supabase.'); return }
     const { data, error } = await supabase.rpc('lusky_set_driver_availability', { p_active: !available })
     if (error || data !== true) { setMessage(error?.message || 'Não foi possível mudar sua disponibilidade.'); return }
@@ -87,8 +90,8 @@ export default function RiderPortal({ orders, onStatus, onSignOut, driverProfile
         {order.status === 'Pronto' && <label className="rider-code pickup"><span><ClipboardCheck size={15}/> Peça o código de retirada à cozinha</span><input inputMode="numeric" maxLength={6} value={codes[order.id] || ''} onChange={event => setCodes(current => ({ ...current, [order.id]: event.target.value.replace(/\D/g,'') }))} placeholder="Código da cozinha"/><button className="button button-dark" disabled={busy} onClick={() => confirm(order,'Saiu para entrega')}>Confirmar retirada <Check size={15}/></button></label>}
         {order.status === 'Saiu para entrega' && <><label className="rider-code delivery-code"><span><PackageCheck size={15}/> Peça o código ao cliente na chegada</span><input inputMode="numeric" maxLength={6} value={codes[order.id] || ''} onChange={event => setCodes(current => ({ ...current, [order.id]: event.target.value.replace(/\D/g,'') }))} placeholder="Código do cliente"/><button className="button button-yellow" disabled={busy} onClick={() => confirm(order,'Entregue')}>Confirmar entrega <Check size={15}/></button></label><div className="rider-incident"><label>Problema nesta entrega<textarea value={incidentText[order.id]||''} onChange={event=>setIncidentText(current=>({...current,[order.id]:event.target.value}))} placeholder="Descreva o que aconteceu para a equipe" maxLength={500}/></label><button className="text-button" onClick={()=>reportIncident(order)}>Registrar ocorrência</button></div></>}
       </div></article>) : <div className="route-empty"><PackageCheck size={24}/><b>Sem entregas atribuídas agora.</b></div>}{message && <p role="status" className="checkout-error">{message}</p>}</section>
-      <aside className="rider-map-panel"><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={destination} rider={position} route={route} /></Suspense><div className="map-note"><Navigation size={16}/><span><b>Rota planejada</b><small>{route ? `${(route.distance_m/1000).toFixed(1)} km · cerca de ${Math.ceil(route.duration_s/60)} min · calculada ${formatTime(route.calculated_at)}. Perfil carro, sem trânsito ao vivo.` : routeError || 'Aguardando cálculo da rota.'}</small></span></div>
+      <aside className="rider-map-panel"><Suspense fallback={<div className="map-unavailable">Abrindo mapa…</div>}><DeliveryMap restaurant={restaurant} destination={destination} rider={position||next?.demo_position} route={route} /></Suspense><div className="map-note"><Navigation size={16}/><span><b>Rota planejada</b><small>{route ? `${(route.distance_m/1000).toFixed(1)} km · cerca de ${Math.ceil(route.duration_s/60)} min · calculada ${formatTime(route.calculated_at)}. Perfil carro, sem trânsito ao vivo.` : routeError || (next?.delivery_latitude==null||restaurant?.latitude==null ? 'Origem ou destino sem pino confirmado.' : demo ? 'Demonstração: linha reta entre os pinos; trajeto por vias não calculado.' : 'Aguardando cálculo da rota.')}</small></span></div>
         {next && navigateUrl && <a className="button button-secondary" href={navigateUrl} target="_blank" rel="noreferrer">Abrir navegação externa</a>}
-        <div className="gps-panel"><b>Compartilhamento de localização</b><p>Enquanto houver entrega em rota, cliente e equipe podem ver sua última posição enviada.</p><button className="button button-dark" disabled={!active} onClick={() => setSharing(value => !value)}>{sharing ? 'Parar compartilhamento' : 'Iniciar GPS'}</button><small role="status">{gpsState}</small></div>
+        <div className="gps-panel"><b>Compartilhamento de localização</b><p>Enquanto houver entrega em rota, cliente e equipe podem ver sua última posição enviada.</p>{demo&&<p className="address-hint">O marcador inicial é simulado. Seu GPS nesta demonstração não é enviado ao servidor.</p>}<button className="button button-dark" disabled={!active} onClick={() => setSharing(value => !value)}>{sharing ? 'Parar compartilhamento' : 'Iniciar GPS'}</button><small role="status">{gpsState}</small></div>
       </aside></div></>}</main></div>
 }
