@@ -16,6 +16,7 @@
 - A resposta atrasada de geocodificação agora é ignorada quando o endereço muda durante a busca. O preenchimento automático de campos por CEP invalida um pino previamente confirmado; esse comportamento ainda precisa de ensaio visual com chave HeiGIT configurada.
 - Foi incluída marcação manual do destino no mapa, iniciada no pino do restaurante com clique obrigatório no destino, e localização da origem por GPS ou coordenadas digitadas. Validação de limites de latitude/longitude entrou nos testes; a marcação manual ainda precisa de ensaio com endereço real.
 - A equipe abriu “Minha conta” no navegador móvel; cabeçalho, dados pessoais, alteração de senha e botão de saída renderizaram com contraste. A prévia do cliente mostrou atalhos “Minha conta”/“Sair da prévia” e bloqueou edição de dados pessoais e senha. Salvamento de perfil, troca de senha e veículo não foram acionados na conta real durante a inspeção. Teste automatizado verifica normalização/validação de placa; persistência do veículo precisa de sessão QA de motoboy.
+- Em transação SQL revertida, um JWT simulado do motoboy atualizou 1 linha do próprio veículo (mesmo valor); outro usuário, simulando papel motoboy, atualizou 0 linhas. O teste confirma a política de escrita por proprietário da linha, sem alterar o veículo persistido.
 
 ## Pendente para aceite operacional
 
