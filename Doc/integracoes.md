@@ -2,7 +2,7 @@
 
 ## Supabase
 
-Projeto conectado: `mhmfqldibtcsuyqsqiqp`. Configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local` ou no host estático. A chave publishable vai ao navegador e depende de RLS. Migrações locais `supabase/migrations/20261029235959...` até `20261030021000...` já foram aplicadas neste projeto; não as reaplique manualmente sem consultar o histórico remoto. A Edge Function `lusky-maps` está implantada com JWT obrigatório.
+Projeto conectado: `mhmfqldibtcsuyqsqiqp`. Configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local` ou no host estático. A chave publishable vai ao navegador e depende de RLS. Migrações locais `supabase/migrations/20261029235959...` até `20261030022000...` já foram aplicadas neste projeto; não as reaplique manualmente sem consultar o histórico remoto. A Edge Function `lusky-maps` está implantada com JWT obrigatório. `lusky-admin-users` versão 4 também está ativa e valida telefone antes de criar ou editar contas.
 
 ## HeiGIT
 

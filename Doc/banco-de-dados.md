@@ -1,11 +1,12 @@
 # Banco de dados
 
-Projeto Supabase conectado: `mhmfqldibtcsuyqsqiqp`. As migrações de 30/10/2026 foram aplicadas, sem excluir pedidos existentes. Arquivos locais em `supabase/migrations/` de `20261029235959` a `20261030021000`. A aplicação pelo conector dividiu rotas e Pix manual em partes menores; os nomes remotos correspondentes estão no histórico do Supabase.
+Projeto Supabase conectado: `mhmfqldibtcsuyqsqiqp`. As migrações de 30/10/2026 foram aplicadas, sem excluir pedidos existentes. Arquivos locais em `supabase/migrations/` de `20261029235959` a `20261030022000`. A aplicação pelo conector dividiu rotas e Pix manual em partes menores; os nomes remotos correspondentes estão no histórico do Supabase.
 
 ## Modelo
 
 - `lusky_restaurant_settings`: origem, coordenadas, raio em linha reta, taxa, meios de pagamento e instruções públicas de Pix manual. Pix manual só pode ser ativado com instruções de 5–500 caracteres.
 - `lusky_profiles`: nome, celular e preferência de contato; e-mail verificado permanece no Auth.
+- `auth.users`: gatilho `lusky_require_signup_phone` exige celular brasileiro de 11 dígitos com DDD em toda nova conta, normaliza o número em `raw_user_meta_data.phone`; `lusky_handle_new_user` copia nome e telefone para `lusky_profiles`. Contas existentes não recebem número fictício.
 - `lusky_customer_addresses`: endereço estruturado, pino confirmado e padrão único por cliente. RLS restringe ao dono.
 - `lusky_orders`: `request_id` único por autor, telefone, itens e preço calculados no servidor, snapshot do endereço, coordenadas, taxa, pagamento, `payment_status`, horário e autor de confirmação. Pedidos antigos são preservados.
 - `lusky_order_events`: auditoria de transição e atribuição.

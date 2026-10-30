@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
         if (data.users.length < 1000) break;
       }
       const [profiles, drivers] = await Promise.all([
-        admin.from("lusky_profiles").select("id,display_name"),
+        admin.from("lusky_profiles").select("id,display_name,phone"),
         admin.from("lusky_motoboy_profiles").select("id,driver_code,vehicle_color,vehicle_plate,vehicle_brand,vehicle_model"),
       ]);
       if (profiles.error) throw profiles.error;
@@ -67,6 +67,7 @@ Deno.serve(async (req: Request) => {
           id: user.id,
           email: user.email ?? "",
           full_name: user.user_metadata?.full_name ?? profile?.display_name ?? "",
+          phone: profile?.phone ?? user.user_metadata?.phone ?? "",
           role,
           active: !bannedUntil || bannedUntil <= Date.now(),
           created_at: user.created_at,
@@ -88,13 +89,16 @@ Deno.serve(async (req: Request) => {
       const email = String(body.email ?? "").trim().toLowerCase();
       const fullName = String(body.full_name ?? "").trim();
       const password = String(body.password ?? "");
+      const phone = String(body.phone ?? "").replace(/\D/g, "");
       const role = String(body.role ?? "");
       if (!email.includes("@") || fullName.length < 3 || fullName.length > 120 || password.length < 8) {
         return json({ error: "Confira o e-mail, o nome completo e a senha (mínimo de 8 caracteres)." }, 400);
       }
+      if (!/^\d{11}$/.test(phone)) return json({ error: "Informe um celular com DDD (11 dígitos)." }, 400);
       if (!["customer", "motoboy", "owner"].includes(role)) return json({ error: "Tipo de conta inválido." }, 400);
       const metadata: Record<string, string> = {
         full_name: fullName,
+        phone,
         account_type: role === "owner" ? "owner" : role,
       };
       if (role === "motoboy") {
@@ -137,16 +141,18 @@ Deno.serve(async (req: Request) => {
     if (action === "update") {
       const fullName = String(body.full_name ?? "").trim();
       const email = String(body.email ?? "").trim().toLowerCase();
+      const phone = String(body.phone ?? "").replace(/\D/g, "");
       if (fullName.length < 3 || fullName.length > 120 || !email.includes("@")) {
         return json({ error: "Confira o nome completo e o e-mail." }, 400);
       }
+      if (!/^\d{11}$/.test(phone)) return json({ error: "Informe um celular com DDD (11 dígitos)." }, 400);
       const { error } = await admin.auth.admin.updateUserById(userId, {
         email,
         email_confirm: true,
-        user_metadata: { ...target.user_metadata, full_name: fullName },
+        user_metadata: { ...target.user_metadata, full_name: fullName, phone },
       });
       if (error) return json({ error: error.message }, 400);
-      const { error: profileError } = await admin.from("lusky_profiles").update({ display_name: fullName }).eq("id", userId);
+      const { error: profileError } = await admin.from("lusky_profiles").update({ display_name: fullName, full_name: fullName, phone }).eq("id", userId);
       if (profileError) throw profileError;
       if (targetRole === "motoboy") {
         const vehicle = body.vehicle ?? {};
