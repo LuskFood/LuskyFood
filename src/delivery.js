@@ -53,6 +53,46 @@ export function distanceKm(a, b) {
   return 6371 * 2 * Math.asin(Math.sqrt(h))
 }
 
+let publicRoadQueue = Promise.resolve()
+let nextPublicRoadRequestAt = 0
+const publicRoadCache = new Map()
+
+// Demo pins are synthetic. Query only the two coordinates needed for their road geometry.
+export function requestDemoRoadRoute(origin, destination) {
+  if (!validMapPoint(origin) || !validMapPoint(destination)) return Promise.reject(new Error('Confirme os pinos de retirada e entrega para calcular a rota.'))
+  const start = [Number(origin.longitude), Number(origin.latitude)]
+  const end = [Number(destination.longitude), Number(destination.latitude)]
+  const key = `${start.join(',')};${end.join(',')}`
+  const cached = publicRoadCache.get(key)
+  if (cached && cached.expires > Date.now()) return Promise.resolve(cached.value)
+  const task = publicRoadQueue.then(async () => {
+    const wait = Math.max(0, nextPublicRoadRequestAt - Date.now())
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait))
+    nextPublicRoadRequestAt = Date.now() + 1_000
+    const points = `${start.join(',')};${end.join(',')}`
+    const url = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${points}?overview=full&geometries=geojson&steps=false`
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8_000)
+    try {
+      const response = await fetch(url, { headers:{ Accept:'application/json' }, signal:controller.signal })
+      if (!response.ok) throw new Error('O FOSSGIS/OSRM não conseguiu calcular esta rota. Tente novamente em instantes.')
+      const data = await response.json()
+      const route = data.routes?.[0]
+      const value = { geometry:route?.geometry, distance_m:route?.distance, duration_s:route?.duration, calculated_at:new Date().toISOString(), profile:'osrm-car-fastest-demo' }
+      if (data.code !== 'Ok' || !validRoadRoute(value)) throw new Error('O FOSSGIS/OSRM não encontrou uma rota pelas ruas entre estes pinos.')
+      if (publicRoadCache.size > 100) publicRoadCache.clear()
+      publicRoadCache.set(key, { value, expires:Date.now() + 600_000 })
+      return value
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('O cálculo da rota demorou a responder. Tente novamente.')
+      if (error instanceof TypeError) throw new Error('Não foi possível acessar o FOSSGIS/OSRM deste navegador. Verifique a conexão e tente novamente.')
+      throw error
+    } finally { clearTimeout(timeout) }
+  })
+  publicRoadQueue = task.then(() => undefined, () => undefined)
+  return task
+}
+
 export async function lookupCep(value, signal) {
   const cep = digits(value)
   if (cep.length !== 8) throw new Error('Digite os 8 números do CEP.')
@@ -76,3 +116,4 @@ export async function mapRequest(client, body) {
   if (data?.error) throw new Error(data.error)
   return data
 }
+

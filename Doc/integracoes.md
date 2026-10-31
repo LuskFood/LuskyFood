@@ -10,6 +10,7 @@ O projeto conectado usa Supabase Auth, Postgres, RLS, Realtime e Edge Functions.
 
 1. Se disponível, configure `HEIGIT_API_KEY` como segredo da Edge Function `lusky-maps`; nunca em `.env.local` com prefixo `VITE_` ou no Git. HeiGIT oferece geocodificação, rotas de carro com preferência de menor distância e otimização.
 2. Sem a chave, `route` e `sequence` usam o serviço público FOSSGIS/OSRM para desenhar rotas de carro pelo trajeto mais rápido estimado. O serviço limita a uma solicitação por segundo, proíbe uso pesado e registra solicitações; a interface inclui atribuição e link para correção do OSM. Para escala comercial, configure um provedor próprio com SLA/cota adequada.
+   No modo de demonstração, o navegador consulta esse mesmo serviço para obter a geometria pelas ruas dos pontos fictícios. As coordenadas enviadas ao FOSSGIS podem constar nos logs do operador; a chamada usa fila por aba e cache local.
 3. Geocodificação e otimização continuam exigindo HeiGIT. Em Configurações, informe o endereço real do restaurante e confirme o pino, raio, taxa e meios de pagamento. `VITE_MAP_TILE_URL` pode trocar o provedor de tiles; confira atribuição, privacidade, política de cache e uso.
 4. Com contas de QA, valide geocodificação, rota A→B, sequência de pedidos, cota e comportamento quando o provedor falhar. Em indisponibilidade, opere manualmente conforme [Operação](operacao.md).
 
