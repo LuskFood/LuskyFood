@@ -18,13 +18,13 @@ O fallback FOSSGIS/OSRM calcula rota pelas vias com perfil de carro e não consi
 
 ## Escopo da etapa visual
 
-As duas migrações de entrega e histórico foram aplicadas ao projeto Supabase de produção confirmado pelo usuário. `lusky-maps` versão 4 está ativa; para os pedidos LF-1 e LF-2839, falta acionar a tentativa autenticada no popup para calcular e salvar a geometria. A hospedagem HTTPS, os redirecionamentos de autenticação e o projeto Netlify ainda precisam de confirmação.
+As duas migrações de entrega e histórico foram aplicadas ao projeto Supabase de produção confirmado pelo usuário. `lusky-maps` versão 4 está ativa. Em 30/10/2026, a demonstração local exibiu rota pelas vias via FOSSGIS/OSRM nas visões de admin, motoboy e cliente. Isso não substitui o teste com contas reais: para os pedidos reais LF-1 e LF-2839, confirme a geometria autenticada no popup, o GPS, o login e os redirecionamentos Auth após configurar o Netlify.
 
 ## GitHub e frontend
 
-Destino configurado: repositório privado `https://github.com/LuskFood/LuskyFood.git`. O histórico local está na branch `main`. As alterações de fallback e documentação estão sendo publicadas sem `force`; confirme o commit remoto após a publicação.
+Destino configurado: repositório privado `https://github.com/LuskFood/LuskyFood.git`. A branch local `main` foi sincronizada por avanço direto com `origin/main`, sem `force`. A branch `backup-main-antes-sync` preserva o estado anterior, e o stash criado pelo GitHub Desktop permanece disponível. O Netlify publica automaticamente a branch `main` do repositório privado no site `https://luskyfood.netlify.app`.
 
-A hospedagem estática requer `dist/`, fallback SPA, domínio HTTPS e redirecionamentos Auth para o domínio publicado. Configure no host somente variáveis públicas do Vite. A publicação do frontend é separada das migrações e Edge Functions do Supabase. GPS web requer HTTPS e permissão do aparelho.
+A hospedagem estática usa `dist/`, fallback SPA e domínio HTTPS. Configure no Netlify, com escopo de build, `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`; em 30/10/2026 elas ainda não estavam presentes e o login publicado mostrava erro de configuração. Depois de salvá-las, execute novo deploy e confirme os redirecionamentos Auth para o domínio publicado. A publicação do frontend é separada das migrações e Edge Functions do Supabase. GPS web requer HTTPS e permissão do aparelho.
 
 ## Checagem pré-produção
 
