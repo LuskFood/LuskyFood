@@ -2,7 +2,7 @@
 
 Plataforma web de pedidos e operação de restaurante. Reúne cardápio, acompanhamento de pedidos, gestão da cozinha e entregas em uma interface com identidade amarelo e carvão.
 
-> Projeto em evolução. Entregas, mapas e consultas administrativas da Etapa 3 têm mudanças locais que ainda precisam ser aplicadas e validadas no Supabase. Rotas reais e publicação ainda estão pendentes. Veja [Etapa 2](Doc/etapa-2-entregas.md) e [Etapa 3](Doc/etapa-3-publicacao.md).
+> Projeto em evolução. A aplicação está publicada no Netlify e conectada ao Supabase. Pedidos reais e pedidos fictícios de apresentação são identificados separadamente na administração.
 
 ## ✨ Funcionalidades
 
@@ -35,6 +35,7 @@ React 19 · Vite · JavaScript · CSS · Supabase Auth/Postgres/Realtime/Edge Fu
 - [Banco de dados](Doc/banco-de-dados.md) · [Segurança e privacidade](Doc/seguranca-e-privacidade.md)
 - [APIs e custos](Doc/apis-e-custos.md) · [Integrações e publicação](Doc/integracoes.md)
 - [Testes e aceite](Doc/testes-e-aceite.md)
+- [Dados fictícios em produção](Doc/demonstracao-producao.md)
 
 ## 🚀 Início rápido
 
@@ -61,11 +62,11 @@ Com Supabase configurado, o login e os dados dependem das permissões e polític
 
 ## 🗺️ Mapas e entregas
 
-O mapa local mostra os pinos confirmados e desenha a geometria de rota pelas vias quando disponível. Sem geometria válida, informa a indisponibilidade e mantém os pinos. O cálculo de via, geocodificação e sequência dependem da chave do provedor configurada no backend. GPS do navegador requer permissão e HTTPS; a demonstração apresenta dados simulados. Endereço da origem, pino e provedor devem ser validados antes de operar entregas reais.
+O mapa mostra os pinos confirmados e desenha a geometria de rota pelas vias quando disponível. Sem geometria válida, informa a indisponibilidade e mantém os pinos. O backend usa o provedor configurado ou o fallback público FOSSGIS/OSRM. GPS do navegador requer permissão e HTTPS; posições da demonstração são simuladas. Endereço da origem, pino e provedor devem ser validados antes de operar entregas reais.
 
 ## 🌐 Publicação
 
-O `netlify.toml` prepara build e roteamento SPA. A conexão à equipe `luskfood`, hospedagem HTTPS, redirecionamentos de autenticação e validação ponta a ponta ainda precisam ser confirmados. Veja [preparação da publicação](Doc/etapa-3-publicacao.md); este repositório não deve ser publicado como público.
+O `netlify.toml` prepara build e roteamento SPA. A aplicação está publicada em [luskyfood.netlify.app](https://luskyfood.netlify.app). As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` precisam estar configuradas no Netlify para autenticação. Veja [preparação da publicação](Doc/etapa-3-publicacao.md); este repositório não deve ser publicado como público.
 
 ## 🔀 Versionamento
 
